@@ -14,6 +14,22 @@ int UC_LEVEL=0;
     errs()<<"\n";
 }
 
+Z3_sort getFPsort(z3::context &ctx, unsigned numBits){
+    switch(numBits){
+        case 32:    return Z3_mk_fpa_sort_single(ctx);break;
+        case 64:    return Z3_mk_fpa_sort_double(ctx);break;
+        case 80:    return Z3_mk_fpa_sort(ctx, 15, 64);break;
+        case 128:   return Z3_mk_fpa_sort_quadruple(ctx);break;
+        default:   
+            errs()<<numBits<<"\n"; 
+            assert(false && "getFPsort error: unvalid floating-point type!");
+            return NULL;
+            break;
+    }
+}
+
+const int BitPerByte = 8;
+
 /***************************table of variables in linear constraints*********************************/
     LinearVarTable::LinearVarTable(z3::context &ctx, CFG *ha){
 
@@ -29,11 +45,10 @@ int UC_LEVEL=0;
             VarType type = var.type;
             unsigned numBits = var.numbits;
 
-            if(inputID<cfg->mainInput.size()&&cfg->mainInput[inputID]==(int)i){
+            if(inputID<cfg->mainInput.size()&&cfg->mainInput[inputID]==i){
 
                 if(type==FP){
-                	assert((numBits==32||numBits==64) && "Numbits float point variable larger than 64!!");
-    				Z3_sort fp_sort = (numBits==32)?Z3_mk_fpa_sort_single(ctx):Z3_mk_fpa_sort_double(ctx);
+    				Z3_sort fp_sort = getFPsort(ctx, numBits);
 
                 	z3::expr temp = ctx.constant(var.name.c_str(), z3::to_sort(ctx, fp_sort));
                     x.push_back(temp);
@@ -47,8 +62,7 @@ int UC_LEVEL=0;
                 var_num++;
             }
             else if(type==FP){
-                assert((numBits==32||numBits==64) && "Numbits float point variable larger than 64!!");
-    			Z3_sort fp_sort = (numBits==32)?Z3_mk_fpa_sort_single(ctx):Z3_mk_fpa_sort_double(ctx);
+    			Z3_sort fp_sort = getFPsort(ctx, numBits);
 
                 z3::expr temp = ctx.constant(var.name.c_str(), z3::to_sort(ctx, fp_sort));
                 x.push_back(temp);
@@ -64,21 +78,16 @@ int UC_LEVEL=0;
         }
     }
 
-    LinearVarTable::~LinearVarTable(){varVal.clear();alias.clear();storeMap.clear();exprMap.clear();x.clear();var_num=0;alloca_num=0;cfg=NULL;}
+    LinearVarTable::~LinearVarTable(){varVal.clear();alias.clear();storeMap.clear();exprMap.clear();x.clear();cfg=NULL;}
 
     void LinearVarTable::setX(int ID, int time, VarType type, unsigned numBits, z3::context &ctx){
 
         int ID2 = exprMap[ID];
         string newName = cfg->variableList[ID].name+"/t"+int2string(time);
         if(type==FP){
-        	if(numBits==32){
-                x[ID2] = ctx.constant(newName.c_str(), z3::to_sort(ctx, Z3_mk_fpa_sort_single(ctx)));
-            }
-            else if(numBits==64){
-                x[ID2] = ctx.constant(newName.c_str(), z3::to_sort(ctx, Z3_mk_fpa_sort_double(ctx)));
-            }
-            else
-                assert(false && "Numbits float point variable larger than 64!!");
+            Z3_sort fp_sort = getFPsort(ctx, numBits);
+                
+            x[ID2] = ctx.constant(newName.c_str(), z3::to_sort(ctx, fp_sort));           
         }
         else if(type==INT){
             x[ID2] = ctx.bv_const(newName.c_str(), numBits);
@@ -222,6 +231,10 @@ LinearVerify::LinearVerify(DebugInfo *d, int mode){
     this->outMode = mode;
 }
 
+LinearVerify::~LinearVerify(){
+    dbg = NULL;
+    clear();
+}
 /* verify the feasibility of the path return true:sat false:unsat  */
 
 bool LinearVerify::check(CFG* ha, vector<int> path){
@@ -231,8 +244,8 @@ bool LinearVerify::check(CFG* ha, vector<int> path){
         printPath(ha, path);
 
     try{
-        //ha->print();
-        //printVector(path);
+        // //ha->print();
+        // printVector(path);
         clock_t start,finish;
 
         z3::expr_vector problem = encode_path(ha, path);
@@ -385,8 +398,7 @@ z3::expr LinearVerify::getExpr(Variable *v, bool &treat, double &val, LinearVarT
 
     if(v->type==FPNUM){
     	z3::expr fbv = c.bv_val(v->name.c_str(), numBits);
-        assert((numBits==32||numBits==64) && "Numbits float point variable larger than 64!!");
-    	Z3_sort fp_sort = (numBits==32)?Z3_mk_fpa_sort_single(c):Z3_mk_fpa_sort_double(c);
+    	Z3_sort fp_sort = getFPsort(c, numBits);;
     	Z3_ast temp = Z3_mk_fpa_to_fp_bv(c, fbv, fp_sort);
         Expr = z3::to_expr(c, temp);
 
@@ -423,7 +435,6 @@ z3::expr LinearVerify::mk_compare_ast(Constraint *con, LinearVarTable *table){
     Variable *lv = table->getAlias(lpv.rvar);
     Variable *rv = table->getAlias(rpv.rvar);
 
-    assert((lv->type==INT && rv->type==INTNUM) && "Mk_compare_ast error: Type is different!!");
     assert(lv->numbits==rv->numbits && "Mk_compare_ast error: Numbits is different!!");
 
     int ID1 = lv->ID;
@@ -561,7 +572,7 @@ z3::expr LinearVerify::mk_assignment_ast(Constraint *con, LinearVarTable *table,
 
                     break;
 	    		}
-	    		case TRUNC:case ZEXT:case SEXT:case FPTRUNC:case FPEXT:case FPTOUI:case FPTOSI:case UITOFP:case SITOFP:case BITCAST:{
+	    		case TRUNC:case ZEXT:case SEXT:case FPTRUNC:case FPEXT:case FPTOUI:case FPTOSI:case UITOFP:case SITOFP:{
 	    			ast = mk_convert_expr(lv, rpv, table, time);	    		
 	    			break;
 	    		}
@@ -696,6 +707,10 @@ z3::expr LinearVerify::mk_ptr_operation_expr(Variable *lv, ParaVariable rpv, Lin
             }
             break;
         }
+        case BITCAST:{
+            // c = bitcast a
+            //
+        }
         default:   
         	assert(false && "Mk_ptr_operation_expr rpv.op error!!"); 
         	break;
@@ -753,21 +768,19 @@ z3::expr LinearVerify::mk_convert_expr(Variable *lv, ParaVariable rpv, LinearVar
     	case FPTRUNC:{
     		//truncate a large size float point type to a small size float point type
     		//i.e. convert double to float now
-    		assert((lv->type==FP && lv->numbits==32) && "Mk_convert_expr FPTRUNC error: lv is not float type!!");
-    		assert((rv->type==FP && rv->numbits==64) && "Mk_convert_expr FPTRUNC error: rv is not double type!!");
+    		assert((lv->type==FP && rv->type==FP) && "Mk_convert_expr FPTRUNC error: not floating-point type!!");
     		assert(lv->numbits<rv->numbits && "Mk_convert_expr FPTRUNC error: lv numbits is larger than rv!!");
     		
-    		temp = Z3_mk_fpa_to_fp_float(c, Z3_mk_fpa_rne(c), rv_expr, Z3_mk_fpa_sort_single(c));
+    		temp = Z3_mk_fpa_to_fp_float(c, Z3_mk_fpa_rne(c), rv_expr, getFPsort(c, lv->numbits));
     		break;
     	}
     	case FPEXT:{
     		//extend a small size float point  type to a large size float point type
     		//i.e. convert float to double now
-    		assert((lv->type==FP && lv->numbits==64) && "Mk_convert_expr FPEXT error: lv is not double type!!");
-    		assert((rv->type==FP && rv->numbits==32) && "Mk_convert_expr FPEXT error: rv is not float type!!");
-    		assert(lv->numbits<rv->numbits && "Mk_convert_expr FPEXT error: lv numbits is smaller than rv!!");
+    		assert((lv->type==FP && rv->type==FP) && "Mk_convert_expr FPEXT error:  not floating-point type!!");
+    		assert(lv->numbits>rv->numbits && "Mk_convert_expr FPEXT error: lv numbits is smaller than rv!!");
     		
-    		temp = Z3_mk_fpa_to_fp_float(c, Z3_mk_fpa_rne(c), rv_expr, Z3_mk_fpa_sort_double(c));
+    		temp = Z3_mk_fpa_to_fp_float(c, Z3_mk_fpa_rne(c), rv_expr, getFPsort(c, lv->numbits));
     		break;
     	}
     	case FPTOUI:{
@@ -793,8 +806,7 @@ z3::expr LinearVerify::mk_convert_expr(Variable *lv, ParaVariable rpv, LinearVar
     		assert(lv->type==FP && "Mk_convert_expr UITOFP error: lv is not float type!!");
     		assert(rv->type==INT && "Mk_convert_expr UITOFP error: rv is not integer type!!");
 
-    		Z3_sort fp_sort = (lv->numbits==32)?Z3_mk_fpa_sort_single(c):Z3_mk_fpa_sort_double(c);
-    		temp = Z3_mk_fpa_to_fp_unsigned(c, Z3_mk_fpa_rne(c), rv_expr, fp_sort);
+    		temp = Z3_mk_fpa_to_fp_unsigned(c, Z3_mk_fpa_rne(c), rv_expr, getFPsort(c, lv->numbits));
     		break;
     	}
     	case SITOFP:{
@@ -802,8 +814,7 @@ z3::expr LinearVerify::mk_convert_expr(Variable *lv, ParaVariable rpv, LinearVar
     		assert(lv->type==FP && "Mk_convert_expr SITOFP error: lv is not float type!!");
     		assert(rv->type==INT && "Mk_convert_expr SITOFP error: rv is not integer type!!");
 
-    		Z3_sort fp_sort = (lv->numbits==32)?Z3_mk_fpa_sort_single(c):Z3_mk_fpa_sort_double(c);
-    		temp = Z3_mk_fpa_to_fp_signed(c, Z3_mk_fpa_rne(c), rv_expr, fp_sort);
+    		temp = Z3_mk_fpa_to_fp_signed(c, Z3_mk_fpa_rne(c), rv_expr, getFPsort(c, lv->numbits));
     		break;
     	}
     	case BITCAST:{
@@ -813,8 +824,7 @@ z3::expr LinearVerify::mk_convert_expr(Variable *lv, ParaVariable rpv, LinearVar
     			temp = Z3_mk_fpa_to_ieee_bv(c, rv_expr);
     		}
     		else if(lv->type==FP && rv->type==INT){
-    			Z3_sort fp_sort = (lv->numbits==32)?Z3_mk_fpa_sort_single(c):Z3_mk_fpa_sort_double(c);
-    			temp = Z3_mk_fpa_to_fp_bv(c, rv_expr, fp_sort);
+    			temp = Z3_mk_fpa_to_fp_bv(c, rv_expr, getFPsort(c, lv->numbits));
     		}
     		else
     			assert(false && "Mk_convert_expr BITCAST error: Bitcast with ptr can't handle yet!!");
@@ -1171,48 +1181,77 @@ z3::expr LinearVerify::mk_function_expr(Variable *lv, ParaVariable rpv, LinearVa
     	}
     	case ISNAN:{
     		assert(rv->type==FP||rv->type==FPNUM && "Mk_function_expr ISNAN error: rv is not a float point type!!");
-    		Z3_ast is_nan = Z3_mk_fpa_is_nan(c, rv_expr);
-    		temp = Z3_mk_ite(c, is_nan, c.bv_val(1,lv->numbits), c.bv_val(0,lv->numbits));
+    		temp = Z3_mk_ite(c, Z3_mk_fpa_eq(c, Z3_mk_fpa_nan(c, getFPsort(c, rv->numbits)), rv_expr), c.bv_val(1, lv->numbits), c.bv_val(0, lv->numbits));
     		break;
     	}
     	case ISINF:{
     		assert(rv->type==FP||rv->type==FPNUM && "Mk_function_expr ISINF error: rv is not a float point type!!");
-    		Z3_ast is_inf = Z3_mk_fpa_is_infinite(c, rv_expr);
-    		temp = Z3_mk_ite(c, is_inf, c.bv_val(1,lv->numbits), c.bv_val(0,lv->numbits));
+            z3::expr pos = z3::to_expr(c, Z3_mk_fpa_eq(c, Z3_mk_fpa_inf(c, getFPsort(c, rv->numbits), Z3_TRUE), rv_expr));
+            z3::expr neg = z3::to_expr(c, Z3_mk_fpa_eq(c, rv_expr, Z3_mk_fpa_inf(c, getFPsort(c, rv->numbits), Z3_FALSE)));
+            z3::expr cond = pos||neg;
+    		temp = Z3_mk_ite(c, cond, c.bv_val(1, lv->numbits), c.bv_val(0, lv->numbits));
+
     		break;
     	}
     	case ISNORMAL:{
     		assert(rv->type==FP||rv->type==FPNUM && "Mk_function_expr ISNORMAL error: rv is not a float point type!!");
-    		Z3_ast is_normal = Z3_mk_fpa_is_normal(c, rv_expr);
-    		temp = Z3_mk_ite(c, is_normal, c.bv_val(1,lv->numbits), c.bv_val(0,lv->numbits));
+            assert(false && "Mk_function_expr ISNORMAL error: USE FPCLASSIFY instead of ISNORMAL!!");
+
+    		z3::expr fpa_bv = z3::to_expr(c, Z3_mk_fpa_to_ieee_bv(c, rv_expr));
+            unsigned ebits = Z3_fpa_get_ebits(c, getFPsort(c, rv->numbits));
+            z3::expr maskbv = concat(concat(c.bv_val(0, 1), c.bv_val((int)(pow(2.0, ebits)-1), ebits)), c.bv_val(0, rv->numbits-1-ebits));
+            z3::expr mask = maskbv & fpa_bv;
+
+            z3::expr isNAN = z3::to_expr(c, Z3_mk_fpa_eq(c, Z3_mk_fpa_nan(c, getFPsort(c, rv->numbits)), rv_expr));
+            z3::expr pos_inf = z3::to_expr(c, Z3_mk_fpa_eq(c, Z3_mk_fpa_inf(c, getFPsort(c, rv->numbits), Z3_TRUE), rv_expr));
+            z3::expr neg_inf = z3::to_expr(c, Z3_mk_fpa_eq(c, rv_expr, Z3_mk_fpa_inf(c, getFPsort(c, rv->numbits), Z3_FALSE)));
+            z3::expr isINF = pos_inf||neg_inf;
+            z3::expr pos_zero = z3::to_expr(c, Z3_mk_fpa_eq(c, Z3_mk_fpa_zero(c, getFPsort(c, rv->numbits), Z3_TRUE), rv_expr));
+            z3::expr neg_zero = z3::to_expr(c, Z3_mk_fpa_eq(c, rv_expr, Z3_mk_fpa_zero(c, getFPsort(c, rv->numbits), Z3_FALSE)));
+            z3::expr isZERO = pos_zero||neg_zero;
+            z3::expr isSUBNORMAL = z3::to_expr(c, Z3_mk_eq(c, mask, c.bv_val(0, rv->numbits)));
+            z3::expr cond = isNAN||isINF||isZERO||isSUBNORMAL;
+    		temp = Z3_mk_ite(c, cond, c.bv_val(0, lv->numbits), c.bv_val(1, lv->numbits));
     		break;
     	}
     	case ISFINITE:{
     		assert(rv->type==FP||rv->type==FPNUM && "Mk_function_expr ISFINITE error: rv is not a float point type!!");
-    		Z3_ast classify[2];
-    		classify[0] = Z3_mk_fpa_is_nan(c, rv_expr);
-    		classify[1] = Z3_mk_fpa_is_infinite(c, rv_expr);
-    		temp = Z3_mk_ite(c, Z3_mk_or(c, 2, classify), c.bv_val(0,lv->numbits), c.bv_val(1,lv->numbits));
+            
+    		z3::expr isNAN = z3::to_expr(c, Z3_mk_fpa_eq(c, Z3_mk_fpa_nan(c, getFPsort(c, rv->numbits)), rv_expr));
+            z3::expr pos_inf = z3::to_expr(c, Z3_mk_fpa_eq(c, Z3_mk_fpa_inf(c, getFPsort(c, rv->numbits), Z3_TRUE), rv_expr));
+            z3::expr neg_inf = z3::to_expr(c, Z3_mk_fpa_eq(c, rv_expr, Z3_mk_fpa_inf(c, getFPsort(c, rv->numbits), Z3_FALSE)));
+            z3::expr isINF = pos_inf||neg_inf;
+            z3::expr cond = isNAN||isINF;
+    		temp = Z3_mk_ite(c, cond, c.bv_val(0, lv->numbits), c.bv_val(1, lv->numbits));
     		break;
     	}
     	case SIGNBIT:{
     		assert(rv->type==FP||rv->type==FPNUM && "Mk_function_expr SIGNBIT error: rv is not an integer type!!");
-    		Z3_ast is_negative = Z3_mk_fpa_is_negative(c, rv_expr);
-    		temp = Z3_mk_ite(c, is_negative, c.bv_val(1,lv->numbits), c.bv_val(0,lv->numbits));
+            z3::expr isNAN = z3::to_expr(c, Z3_mk_fpa_eq(c, Z3_mk_fpa_nan(c, getFPsort(c, rv->numbits)), rv_expr));
+            z3::expr isPOS = z3::to_expr(c, Z3_mk_fpa_eq(c, Z3_mk_fpa_abs(c, rv_expr), rv_expr));
+            z3::expr cond = isNAN||isPOS;
+    		temp = Z3_mk_ite(c, cond, c.bv_val(0, lv->numbits), c.bv_val(1, lv->numbits));
     		break;
     	}
     	case CLASSIFY:{
     		assert(rv->type==FP||rv->type==FPNUM && "Mk_function_expr CLASSIFY error: rv is not an integer type!!");
-    		Z3_ast is_nan = Z3_mk_fpa_is_nan(c, rv_expr);						//0
-    		Z3_ast is_inf = Z3_mk_fpa_is_infinite(c, rv_expr);					//1
-    		Z3_ast is_zero = Z3_mk_fpa_is_zero(c, rv_expr);						//2
-    		Z3_ast is_subnormal = Z3_mk_fpa_is_subnormal(c, rv_expr);			//3
-    		// Z3_ast is_normal = Z3_mk_fpa_is_normal(c, rv_expr);					//4
-    		temp = Z3_mk_ite(c, is_nan, c.bv_val(0,lv->numbits), 
-    				Z3_mk_ite(c, is_inf, c.bv_val(1,lv->numbits),
-    					Z3_mk_ite(c, is_zero, c.bv_val(2,lv->numbits),
-    						Z3_mk_ite(c, is_subnormal, c.bv_val(3,lv->numbits),
-    							c.bv_val(4,lv->numbits)))));
+
+            z3::expr isNAN = z3::to_expr(c, Z3_mk_fpa_eq(c, Z3_mk_fpa_nan(c, getFPsort(c, rv->numbits)), rv_expr));
+            z3::expr pos_inf = z3::to_expr(c, Z3_mk_fpa_eq(c, Z3_mk_fpa_inf(c, getFPsort(c, rv->numbits), Z3_TRUE), rv_expr));
+            z3::expr neg_inf = z3::to_expr(c, Z3_mk_fpa_eq(c, rv_expr, Z3_mk_fpa_inf(c, getFPsort(c, rv->numbits), Z3_FALSE)));
+            z3::expr isINF = pos_inf||neg_inf;
+            z3::expr pos_zero = z3::to_expr(c, Z3_mk_fpa_eq(c, Z3_mk_fpa_zero(c, getFPsort(c, rv->numbits), Z3_TRUE), rv_expr));
+            z3::expr neg_zero = z3::to_expr(c, Z3_mk_fpa_eq(c, rv_expr, Z3_mk_fpa_zero(c, getFPsort(c, rv->numbits), Z3_FALSE)));
+            z3::expr isZERO = pos_zero||neg_zero;
+
+            unsigned ebits = Z3_fpa_get_ebits(c, getFPsort(c, rv->numbits));
+            z3::expr maskbv = concat(concat(c.bv_val(0, 1), c.bv_val((int)(pow(2.0, ebits)-1), ebits)), c.bv_val(0, rv->numbits-1-ebits));
+            z3::expr isSUBNORMAL = z3::to_expr(c, Z3_mk_eq(c, Z3_mk_bvand(c, Z3_mk_fpa_to_ieee_bv(c, rv_expr), maskbv), c.bv_val(0, rv->numbits)));
+
+            z3::expr subnormal_ite = ite(isSUBNORMAL, c.bv_val(3, lv->numbits), c.bv_val(4, lv->numbits));
+            z3::expr zero_ite = ite(isZERO, c.bv_val(2, lv->numbits), subnormal_ite);
+            z3::expr inf_ite = ite(isINF, c.bv_val(1, lv->numbits), zero_ite);
+    		temp = ite(isNAN, c.bv_val(0, lv->numbits), inf_ite);
     		break;
     	}
     	default:
@@ -1222,13 +1261,14 @@ z3::expr LinearVerify::mk_function_expr(Variable *lv, ParaVariable rpv, LinearVa
 
     exprr = z3::to_expr(c, temp);
 
-    return mk_eq_ast(exprl, exprr);;
+    return mk_eq_ast(exprl, exprr);
 }
 
 
 /* transform constraints into smt2 with z3 api */
 bool LinearVerify::get_constraint(Constraint *con, LinearVarTable *table, int time, z3::expr_vector &p){
-	errs()<<*con<<"\n";
+
+    // errs()<<*con<<"\n";
     dbg->getConsInfo(con);
     Operator op = con->op;
     
@@ -1592,11 +1632,15 @@ z3::expr_vector LinearVerify::encode_path(CFG* ha, vector<int> patharray){
         }
     }
 
+    errs()<<"Encode end\n";
+    delete table;
     return problem;
 }
 
 /* analyze the unsat core to extract the infeasible path segment */
 bool LinearVerify::analyze_unsat_core(SubsetSolver& csolver, MapSolver& msolver){
+
+    cerr<<"Solving constraints~~~\n";
     for(int k=0;k<MUS_LIMIT;k++){
         vector<int> seed = msolver.next_seed();
         //errs()<<"\n"<<"seed"<<"\n";
@@ -1632,6 +1676,8 @@ bool LinearVerify::analyze_unsat_core(SubsetSolver& csolver, MapSolver& msolver)
     }
     return true;
 }
+
+
 /* add unsat core into cache */
 void LinearVerify::add_IIS(IndexPair index){
 	errs()<<"IIS:\t";

@@ -121,7 +121,7 @@ ProgramCFG::ProgramCFG(Module &m):M(m){
     double buildTime = 1000*(double)(finish-start)/CLOCKS_PER_SEC;
     errs() << "#BUILDCFG Time: \t" << ConvertToString(buildTime) << "ms\n";
 
-    if(outMode==1)
+    if(outMode)
         dbg->print();
     
     if(dbg->loc>200){
@@ -130,9 +130,7 @@ ProgramCFG::ProgramCFG(Module &m):M(m){
     }
     int inputbound=bound;
 
-
     start=clock();
-
 
     BoundedVerification verify(cfg,inputbound,target,prec,dbg,output);
     verify.check(check);
@@ -153,7 +151,6 @@ ProgramCFG::ProgramCFG(Module &m):M(m){
     // BoundedVerification verify(cfg,inputbound,target,prec,dbg,output);
     // verify.check(dreal_time,check);
 
-
     errs() << "bound:\t" << bound <<"\tprecision:\t" << prec <<"\tfunctionName:\t" << funcname << "\tcheck:\t" << check << "\n";
 //    errs() << "Time: \t" << ConvertToString(1000*(double)(finish-start)/CLOCKS_PER_SEC) << "ms \n";
     errs() << "#Solver Time: \t" << ConvertToString(solver_time/1000) << "s\n";
@@ -165,6 +162,8 @@ ProgramCFG::ProgramCFG(Module &m):M(m){
     char time_str[64];
     sprintf(time_str, "#CPU Time: %g s\n", cpu_time);
     errs()<<time_str<<mem_str;
+
+    delete cfg;
 }
 
 enum color{WHITE,BLACK,GRAY};
@@ -185,6 +184,7 @@ void ProgramCFG::printMode(){
     switch(outMode){
         case 0:errs()<<"Print Check result only\n";break;
         case 1:errs()<<"Print Check result with CFG and Constraints\n";break;
+        case 2:errs()<<"Print Check result with test informations\n";break;
         default:errs()<<"OutMode error\n";
     }
 }
@@ -208,7 +208,7 @@ void  ProgramCFG::setFuncVariable(const Function *F,string func, CFG* cfg, bool 
 
         if(initial){
             string varNum = it->getName();
-            string varName = func+"_"+varNum;
+            string varName = func+"."+varNum;
             
             if(Ty->isPointerTy()){
                 Type *ETy = Ty->getPointerElementType();
@@ -236,7 +236,7 @@ void  ProgramCFG::setFuncVariable(const Function *F,string func, CFG* cfg, bool 
         else{
             int ID = cfg->counter_variable++;
             string varNum = it->getName();
-            string varName = func+"_"+varNum;
+            string varName = func+"."+varNum;
             
             VarType type;
             if(Ty->isPointerTy()){
@@ -319,7 +319,7 @@ void ProgramCFG::readBasicblock(BasicBlock *b, CFG *cfg, int time){
 
         string func = F->getName();
         if(time>0)
-        func = func+ConvertToString(time);
+        func = func+".t"+ConvertToString(time);
             //Generate a new state
         unsigned id = cfg->counter_state++;
         string  str = ConvertToString(cfg->counter_s_state);
@@ -414,11 +414,11 @@ void ProgramCFG::readBasicblock(BasicBlock *b, CFG *cfg, int time){
 
                     string funcName = callFunc;
                     if(t>0)
-                        funcName = callFunc+ConvertToString(t);
+                        funcName = callFunc+".t"+ConvertToString(t);
 
                     s = new State(false, id, name, func);
                     cfg->stateList.resize(id+1);
-                    bool hasFromS = W.InsertCFGLabel(cfg, b, s, func, funcName+"_ret",true);
+                    bool hasFromS = W.InsertCFGLabel(cfg, b, s, func, funcName+".ret",true);
                     cfg->retVar.pop_back();
                     if(!hasFromS){
                         cfg->counter_state--;

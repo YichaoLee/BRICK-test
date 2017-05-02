@@ -21,7 +21,7 @@ BoundedVerification::BoundedVerification(CFG* aut, int bound, vector<int> target
         verify = new LinearVerify(dbg, outMode);
     }
     else{
-        // verify = new UnlinearVerify(precision, dbg, outMode);
+        verify = new UnlinearVerify(precision, dbg, outMode);
     }
 }
 
@@ -99,14 +99,14 @@ bool BoundedVerification::check(string check){
 
     encode_graph();    
 
-    if(outMode==1)
+    if(outMode!=0)
         errs()<<"#targetsize:\t"<<target.size()<<"\n";
     if(target.size()==0){
         errs()<<"Has no exceptions~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
         return true;
     }
     
-    if(outMode==1){
+    if(outMode!=0){
         for(int i=0;i<(int)target.size();i++)
             errs()<<"target["<<i<<"]:"<<cfg->stateList[target[i]].name<<"("<<cfg->stateList[target[i]].error<<")\n";
     }
@@ -118,9 +118,11 @@ bool BoundedVerification::check(string check){
         witPath.clear();
         if(outMode==1)
             errs()<<"target["<<i<<"]:"<<cfg->stateList[target[i]].name<<"("<<target[i]<<")\n";
-//        DFS(bound,bound,cfg->initialState->ID,target[i]);
         int targetID = target[i];
-        result=solve(targetID);
+	if(cfg->isLinear())	
+		result=solve(targetID);
+	else        
+		DFS(bound,bound,cfg->initialState->ID,targetID);
         string name = cfg->stateList[targetID].name;
         if(name.at(0)=='q')
             line = cfg->stateList[targetID].locList[0];
@@ -160,7 +162,7 @@ bool BoundedVerification::check(string check){
             errs()<<"at line "<<originLine<<" is unreachable under bound "<<bound<<"\n";
             errs()<<"Number of path checked:"<<num_of_path<<"\n";
         }
-        if(outMode==1)
+        if(outMode!=0)
         {
             errs()<<"#Avg_var: "<<dbg->counter_var*1.0/num_of_path<<"\n";
             errs()<<"#Avg_nolinearop: "<<dbg->counter_op*1.0/num_of_path<<"\n";
@@ -174,6 +176,7 @@ bool BoundedVerification::check(string check){
 }
 
 bool BoundedVerification::solve(int cur_target){
+
     for(int i=0;i<=bound;i++){
         while(true){
             if(s.solve(var(i,cur_target))){
@@ -264,6 +267,7 @@ void BoundedVerification::encode_graph(){
             else{    
                 lits.clear();
                 for(unsigned j=0;j<st->transList.size();j++){
+                    if(st->transList[j]->toState==NULL) continue;
                     Minisat::Lit next_tran_exp=var(k,st->transList[j]->ID);
                     Minisat::Lit next_state_exp=var(k+1,st->transList[j]->toState->ID);
                     s.addClause(~x, ~next_tran_exp, next_state_exp);

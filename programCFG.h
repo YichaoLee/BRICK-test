@@ -172,6 +172,14 @@ class ProgramCFG{
         void  setFuncVariable(const Function *F, string func, CFG* cfg, bool initial=false);
     public:
         ProgramCFG(Module &m);
+        ~ProgramCFG(){
+            if(dbg)
+                delete dbg;
+            dbg = NULL;
+            if(root)
+                delete root;
+            root = NULL;
+        }
         std::map<BasicBlock*, CFGNode> *nodes;
         CFGNode *getRoot(){
             return root;

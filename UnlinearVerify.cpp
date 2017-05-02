@@ -17,13 +17,13 @@ using namespace std;
             Variable var =  cfg->variableList[i];
             VarType type = var.type;
 
-            if(inputID<cfg->mainInput.size()&&cfg->mainInput[inputID]==(int)i){
+            if(inputID<cfg->mainInput.size()&&cfg->mainInput[inputID]==i){
 
                 if(type==FP)
-                    x.push_back(dreal_mk_real_var(ctx, var.name.c_str(), -100.0, 100.0));
+                    x.push_back(dreal_mk_real_var(ctx, var.name.c_str(), -1000.0, 1000.0));
 //                x.push_back(dreal_mk_unbounded_real_var(ctx, var.name.c_str()));
                 else if(type==INT)
-                    x.push_back(dreal_mk_int_var(ctx, var.name.c_str(), -100.0, 100.0));
+                    x.push_back(dreal_mk_int_var(ctx, var.name.c_str(), -1000.0, 1000.0));
                 exprMap[i] = var_num;
 //                double const x_lb = dreal_get_lb(ctx, x[var_num]);
 //                double const x_ub = dreal_get_ub(ctx, x[var_num]);
@@ -45,17 +45,17 @@ using namespace std;
         }
     }
 
-    UnlinearVarTable::~UnlinearVarTable(){varVal.clear();alias.clear();storeMap.clear();exprMap.clear();x.clear();var_num=0;alloca_num=0;cfg=NULL;}
+    UnlinearVarTable::~UnlinearVarTable(){varVal.clear();alias.clear();storeMap.clear();exprMap.clear();x.clear();cfg=NULL;}
 
 
     void UnlinearVarTable::setX(int ID, int time, VarType type){
         int ID2 = exprMap[ID];
         if(type==FP)
-            x[ID2] = dreal_mk_unbounded_real_var(ctx, (cfg->variableList[ID].name+"_"+int2string(time)).c_str());
+            x[ID2] = dreal_mk_unbounded_real_var(ctx, (cfg->variableList[ID].name+"/t"+int2string(time)).c_str());
         else if(type==INT)
-            x[ID2] = dreal_mk_unbounded_int_var(ctx, (cfg->variableList[ID].name+"_"+int2string(time)).c_str());
+            x[ID2] = dreal_mk_unbounded_int_var(ctx, (cfg->variableList[ID].name+"/t"+int2string(time)).c_str());
         else
-            errs()<<"SetX error 10086!!\n";
+            assert(false && "SetX error 10086!!");
     }
     int UnlinearVarTable::alloca(){
         storeMap[++alloca_num] = -2;
@@ -138,7 +138,7 @@ using namespace std;
     }
     bool UnlinearVarTable::getVal(Variable *var, double &v){
         if(var->type==INTNUM||var->type==FPNUM){
-            v=ConvertToDouble(var->name);
+            v=var->getVal();
             return true;
         }
         int ID = var->ID;
@@ -176,6 +176,15 @@ using namespace std;
 
 /***********************************check with dReal*********************************************/
 
+UnlinearVerify::~UnlinearVerify(){
+    if(table)
+        delete table;
+    table = NULL;
+    dreal_del_context(ctx);
+    index_cache.clear();
+    core_index.clear();
+}
+
 bool UnlinearVerify::check(CFG* ha, vector<int> path)
 {
     clear();
@@ -211,10 +220,10 @@ bool UnlinearVerify::check(CFG* ha, vector<int> path)
 }
 
 void UnlinearVerify::print_sol(CFG* cfg) {
-    vector<int> &x = cfg->mainInput;
+    vector<unsigned> &x = cfg->mainInput;
     for(unsigned i=0;i<x.size();i++){
 
-        dreal_expr mainInput = table->getX(x[i]);
+        dreal_expr mainInput = table->getX(static_cast<int>(x[i]));
 
         double const x_lb = dreal_get_lb(ctx, mainInput);
         double const x_ub = dreal_get_ub(ctx, mainInput);
@@ -223,190 +232,130 @@ void UnlinearVerify::print_sol(CFG* cfg) {
     return;
 }
 
-dreal_expr UnlinearVerify::getExpr(Variable *v, bool &treat, double &val, UnlinearVarTable *table)
-{
-    dreal_expr expr=NULL;
-    if(v->type==INTNUM||v->type==FPNUM){
-        expr = dreal_mk_num_from_string(ctx, v->name.c_str());
-        val = ConvertToDouble(v->name);
+// dreal_expr UnlinearVerify::getExpr(Variable *v, bool &treat, double &val, UnlinearVarTable *table)
+// {
+//     dreal_expr expr=NULL;
+//     if(v->type==INTNUM||v->type==FPNUM){
+//         expr = dreal_mk_num_from_string(ctx, v->name.c_str());
+//         val = ConvertToDouble(v->name);
+//     }
+//     else if(v->type == INT || v->type==FP){
+//         expr = table->getX(v->ID);
+//         treat = treat&table->getVal(v->ID, val);
+//     }
+//     else
+//         errs()<<"getExpr error : v->type error\n";
+//     return expr;
+// }
+
+
+void UnlinearVerify::dreal_mk_tobv_expr(dreal_context ctx, dreal_expr x, string name, unsigned num, vector<dreal_expr> &xbv){
+    dreal_expr xt_val = dreal_mk_unbounded_int_var(ctx, (name+"/bvval").c_str());
+    dreal_expr xt_ast = dreal_mk_ite(ctx, dreal_mk_geq(ctx, x, dreal_mk_num(ctx, 0)), 
+                            dreal_mk_eq(ctx, xt_val, x), 
+                            dreal_mk_eq(ctx, xt_val, dreal_mk_minus(ctx, dreal_mk_num(ctx, pow(2.0, num)), x)));
+    dreal_assert(ctx, xt_ast);
+    dreal_expr *xt = new dreal_expr[num];
+
+    for(unsigned i=0;i<num;i++){
+        string bvname = name+"/bv"+ConvertToString(i);
+        xbv.push_back(dreal_mk_int_var(ctx, bvname.c_str(), 0, 1));
+        xt[i] = dreal_mk_times_2(ctx, xbv[i], dreal_mk_num(ctx, pow(2.0, i)));
     }
-    else if(v->type == INT || v->type==FP){
-        expr = table->getX(v->ID);
-        treat = treat&table->getVal(v->ID, val);
+
+    dreal_expr ast = dreal_mk_eq(ctx, xt_val, dreal_mk_plus(ctx, xt, num));
+    if(outMode==1){
+        cerr<<"(assert ";
+        dreal_print_expr(ast);
+        cerr<<")"<<endl;
     }
-    else
-        errs()<<"getExpr error : v->type error\n";
-    return expr;
+    delete[] xt;
+    dreal_assert(ctx, ast);
+
+    return;
 }
 
-dreal_expr UnlinearVerify::dreal_mk_AND(dreal_context ctx, dreal_expr y, dreal_expr z, string name, unsigned num){
-    dreal_expr* xlt = new dreal_expr[num];
-    dreal_expr* xrt = new dreal_expr[num];
+dreal_expr UnlinearVerify::dreal_mk_AND(dreal_context ctx, dreal_expr y, dreal_expr z, string yname, string zname, unsigned num){
     dreal_expr* xt = new dreal_expr[num];
     vector<dreal_expr> xl;
     vector<dreal_expr> xr;
 
-    for(unsigned i=0;i<num;i++){
-        string lname = name+"_l"+ConvertToString(i);
-        xl.push_back(dreal_mk_int_var(ctx, lname.c_str(), 0, 1));
-        xlt[i] = dreal_mk_times_2(ctx, xl[i], dreal_mk_pow(ctx, dreal_mk_num(ctx, 2), dreal_mk_num(ctx, i)));
-    }
-    dreal_expr ast_l = dreal_mk_eq(ctx, y, dreal_mk_plus(ctx, xlt, num));
-    if(outMode==1){
-        dreal_print_expr(ast_l);
-        cerr<< endl;
-    }
-    dreal_assert(ctx, ast_l);
-
-    for(unsigned i=0;i<num;i++){
-        string rname = name+"_r"+ConvertToString(i);
-        xr.push_back(dreal_mk_int_var(ctx, rname.c_str(), 0, 1));
-        xrt[i] = dreal_mk_times_2(ctx, xr[i], dreal_mk_pow(ctx, dreal_mk_num(ctx, 2), dreal_mk_num(ctx, i)));
-    }
-    dreal_expr ast_r = dreal_mk_eq(ctx, z, dreal_mk_plus(ctx, xrt, num));
-    if(outMode==1){
-        dreal_print_expr(ast_r);
-        cerr<< endl;
-    }
-    dreal_assert(ctx, ast_r);
+    dreal_mk_tobv_expr(ctx, y, yname, num, xl);
+    dreal_mk_tobv_expr(ctx, z, zname, num, xr);
 
     for(unsigned i=0; i<num; i++){
-        xt[i] = dreal_mk_times_2(ctx, dreal_mk_times_2(ctx, xl[i], xr[i]), dreal_mk_pow(ctx, dreal_mk_num(ctx, 2), dreal_mk_num(ctx, i)));
+        xt[i] = dreal_mk_times_2(ctx, dreal_mk_times_2(ctx, xl[i], xr[i]), dreal_mk_num(ctx, pow(2.0, i)));
     }
 
     dreal_expr ast = dreal_mk_plus(ctx, xt, num);
+    delete[] xt;
     return ast;
 }
 
-dreal_expr UnlinearVerify::dreal_mk_NAND(dreal_context ctx, dreal_expr y, dreal_expr z, string name, unsigned num){
-    dreal_expr* xlt = new dreal_expr[num];
-    dreal_expr* xrt = new dreal_expr[num];
+dreal_expr UnlinearVerify::dreal_mk_NAND(dreal_context ctx, dreal_expr y, dreal_expr z, string yname, string zname, unsigned num){
     dreal_expr* xt = new dreal_expr[num];
     vector<dreal_expr> xl;
     vector<dreal_expr> xr;
 
-    for(unsigned i=0;i<num;i++){
-        string lname = name+"_l"+ConvertToString(i);
-        xl.push_back(dreal_mk_int_var(ctx, lname.c_str(), 0, 1));
-        xlt[i] = dreal_mk_times_2(ctx, xl[i], dreal_mk_pow(ctx, dreal_mk_num(ctx, 2), dreal_mk_num(ctx, i)));
-    }
-    dreal_expr ast_l = dreal_mk_eq(ctx, y, dreal_mk_plus(ctx, xlt, num));
-    if(outMode==1){
-        dreal_print_expr(ast_l);
-        cerr<< endl;
-    }
-    dreal_assert(ctx, ast_l);
-
-    for(unsigned i=0;i<num;i++){
-        string rname = name+"_r"+ConvertToString(i);
-        xr.push_back(dreal_mk_int_var(ctx, rname.c_str(), 0, 1));
-        xrt[i] = dreal_mk_times_2(ctx, xr[i], dreal_mk_pow(ctx, dreal_mk_num(ctx, 2), dreal_mk_num(ctx, i)));
-    }
-    dreal_expr ast_r = dreal_mk_eq(ctx, z, dreal_mk_plus(ctx, xrt, num));
-    if(outMode==1){
-        dreal_print_expr(ast_r);
-        cerr<< endl;
-    }
-    dreal_assert(ctx, ast_r);
+    dreal_mk_tobv_expr(ctx, y, yname, num, xl);
+    dreal_mk_tobv_expr(ctx, z, zname, num, xr);
 
     for(unsigned i=0; i<num; i++){
-        xt[i] = dreal_mk_times_2(ctx, dreal_mk_minus(ctx, dreal_mk_num(ctx, 1), dreal_mk_times_2(ctx, xl[i], xr[i])), dreal_mk_pow(ctx, dreal_mk_num(ctx, 2), dreal_mk_num(ctx, i)));
+        xt[i] = dreal_mk_times_2(ctx, dreal_mk_minus(ctx, dreal_mk_num(ctx, 1), dreal_mk_times_2(ctx, xl[i], xr[i])), dreal_mk_num(ctx, pow(2.0, i)));
     }
 
     dreal_expr ast = dreal_mk_plus(ctx, xt, num);
+    delete[] xt;
     return ast;
 }
 
-dreal_expr UnlinearVerify::dreal_mk_OR(dreal_context ctx, dreal_expr y, dreal_expr z, string name, unsigned num){
-    dreal_expr* xlt = new dreal_expr[num];
-    dreal_expr* xrt = new dreal_expr[num];
+dreal_expr UnlinearVerify::dreal_mk_OR(dreal_context ctx, dreal_expr y, dreal_expr z, string yname, string zname, unsigned num){
     dreal_expr* xt = new dreal_expr[num];
     vector<dreal_expr> xl;
     vector<dreal_expr> xr;
 
-    for(unsigned i=0;i<num;i++){
-        string lname = name+"_l"+ConvertToString(i);
-        xl.push_back(dreal_mk_int_var(ctx, lname.c_str(), 0, 1));
-        xlt[i] = dreal_mk_times_2(ctx, xl[i], dreal_mk_pow(ctx, dreal_mk_num(ctx, 2), dreal_mk_num(ctx, i)));
-    }
-    dreal_expr ast_l = dreal_mk_eq(ctx, y, dreal_mk_plus(ctx, xlt, num));
-    if(outMode==1){
-        dreal_print_expr(ast_l);
-        cerr<< endl;
-    }
-    dreal_assert(ctx, ast_l);
-
-    for(unsigned i=0;i<num;i++){
-        string rname = name+"_r"+ConvertToString(i);
-        xr.push_back(dreal_mk_int_var(ctx, rname.c_str(), 0, 1));
-        xrt[i] = dreal_mk_times_2(ctx, xr[i], dreal_mk_pow(ctx, dreal_mk_num(ctx, 2), dreal_mk_num(ctx, i)));
-    }
-    dreal_expr ast_r = dreal_mk_eq(ctx, z, dreal_mk_plus(ctx, xrt, num));
-    if(outMode==1){
-        dreal_print_expr(ast_r);
-        cerr<< endl;
-    }
-    dreal_assert(ctx, ast_r);
+    dreal_mk_tobv_expr(ctx, y, yname, num, xl);
+    dreal_mk_tobv_expr(ctx, z, zname, num, xr);
 
     for(unsigned i=0; i<num; i++){
         dreal_expr xl_t = dreal_mk_minus(ctx, dreal_mk_num(ctx, 1), xl[i]);
         dreal_expr xr_t = dreal_mk_minus(ctx, dreal_mk_num(ctx, 1), xr[i]);
-        xt[i] = dreal_mk_times_2(ctx, dreal_mk_minus(ctx, dreal_mk_num(ctx, 1), dreal_mk_times_2(ctx, xl_t, xr_t)), dreal_mk_pow(ctx, dreal_mk_num(ctx, 2), dreal_mk_num(ctx, i)));
+        xt[i] = dreal_mk_times_2(ctx, dreal_mk_minus(ctx, dreal_mk_num(ctx, 1), dreal_mk_times_2(ctx, xl_t, xr_t)), dreal_mk_num(ctx, pow(2.0, i)));
     }
 
     dreal_expr ast = dreal_mk_plus(ctx, xt, num);
+    delete[] xt;
     return ast;
 }
 
-dreal_expr UnlinearVerify::dreal_mk_XOR(dreal_context ctx, dreal_expr y, dreal_expr z, string name, unsigned num){
-    dreal_expr* xlt = new dreal_expr[num];
-    dreal_expr* xrt = new dreal_expr[num];
+dreal_expr UnlinearVerify::dreal_mk_XOR(dreal_context ctx, dreal_expr y, dreal_expr z, string yname, string zname, unsigned num){
     dreal_expr* xt = new dreal_expr[num];
     vector<dreal_expr> xl;
     vector<dreal_expr> xr;
 
-    for(unsigned i=0;i<num;i++){
-        string lname = name+"_l"+ConvertToString(i);
-        xl.push_back(dreal_mk_int_var(ctx, lname.c_str(), 0, 1));
-        xlt[i] = dreal_mk_times_2(ctx, xl[i], dreal_mk_pow(ctx, dreal_mk_num(ctx, 2), dreal_mk_num(ctx, i)));
-    }
-    dreal_expr ast_l = dreal_mk_eq(ctx, y, dreal_mk_plus(ctx, xlt, num));
-    if(outMode==1){
-        dreal_print_expr(ast_l);
-        cerr<< endl;
-    }
-    dreal_assert(ctx, ast_l);
-
-    for(unsigned i=0;i<num;i++){
-        string rname = name+"_r"+ConvertToString(i);
-        xr.push_back(dreal_mk_int_var(ctx, rname.c_str(), 0, 1));
-        xrt[i] = dreal_mk_times_2(ctx, xr[i], dreal_mk_pow(ctx, dreal_mk_num(ctx, 2), dreal_mk_num(ctx, i)));
-    }
-    dreal_expr ast_r = dreal_mk_eq(ctx, z, dreal_mk_plus(ctx, xrt, num));
-    if(outMode==1){
-        dreal_print_expr(ast_r);
-        cerr<< endl;
-    }
-    dreal_assert(ctx, ast_r);
+    dreal_mk_tobv_expr(ctx, y, yname, num, xl);
+    dreal_mk_tobv_expr(ctx, z, zname, num, xr);
 
     for(unsigned i=0; i<num; i++){
         dreal_expr ite = dreal_mk_ite(ctx, dreal_mk_eq(ctx, xl[i], xr[i]), dreal_mk_num(ctx, 0), dreal_mk_num(ctx, 1));
-        xt[i] = dreal_mk_times_2(ctx, ite, dreal_mk_pow(ctx, dreal_mk_num(ctx, 2), dreal_mk_num(ctx, i)));
+        xt[i] = dreal_mk_times_2(ctx, ite, dreal_mk_num(ctx, pow(2.0, i)));
     }
 
     dreal_expr ast = dreal_mk_plus(ctx, xt, num);
+    delete[] xt;
     return ast;
 }
 
-dreal_expr UnlinearVerify::dreal_mk_SREM(dreal_context ctx, dreal_expr y, dreal_expr z, string name){
-    string div_name = name+"_div";
-    string real_name = name+"_divreal";
+dreal_expr UnlinearVerify::dreal_mk_REM(dreal_context ctx, dreal_expr y, dreal_expr z, string name){
+    string div_name = name+"/div";
+    string real_name = name+"/divreal";
     dreal_expr div_real = dreal_mk_unbounded_real_var(ctx, real_name.c_str());
     dreal_expr div_expr = dreal_mk_unbounded_int_var(ctx, div_name.c_str());
     dreal_expr ast_t = dreal_mk_eq(ctx, div_real, dreal_mk_div(ctx, y, z));
     if(outMode==1){
+        cerr<<"(assert ";
         dreal_print_expr(ast_t);
-        cerr<< endl;
+        cerr<<")"<<endl;
     }
     dreal_assert(ctx, ast_t);
 
@@ -414,8 +363,9 @@ dreal_expr UnlinearVerify::dreal_mk_SREM(dreal_context ctx, dreal_expr y, dreal_
     dreal_expr ast_tgt = dreal_mk_gt(ctx, div_expr, dreal_mk_minus(ctx, div_real, dreal_mk_num(ctx, 1)));
     dreal_expr ast_and = dreal_mk_and_2(ctx, ast_tleq, ast_tgt);
     if(outMode==1){
+        cerr<<"(assert ";
         dreal_print_expr(ast_and);
-        cerr<< endl;
+        cerr<<")"<<endl;
     }
     dreal_assert(ctx, ast_and);
 
@@ -427,25 +377,37 @@ dreal_expr UnlinearVerify::dreal_mk_ASHR(dreal_context ctx, dreal_expr y, int rr
     dreal_expr* xt = new dreal_expr[num];
     vector<dreal_expr> x;
 
-    for(unsigned i=0;i<num;i++){
-        string tname = name+"_t"+ConvertToString(i);
-        x.push_back(dreal_mk_int_var(ctx, tname.c_str(), 0, 1));
-        xt[i] = dreal_mk_times_2(ctx, x[i], dreal_mk_pow(ctx, dreal_mk_num(ctx, 2), dreal_mk_num(ctx, i)));
-    }
-    dreal_expr ast_t = dreal_mk_eq(ctx, y, dreal_mk_plus(ctx, xt, num));
-    if(outMode==1){
-        dreal_print_expr(ast_t);
-        cerr<< endl;
-    }
-    dreal_assert(ctx, ast_t);
+    dreal_mk_tobv_expr(ctx, y, name, num, x);
 
-    delete xt;
-    xt = new dreal_expr[num-rr];
+
     for(unsigned i=0; i<num-rr; i++){
-        xt[i] = dreal_mk_times_2(ctx, x[i+rr], dreal_mk_pow(ctx, dreal_mk_num(ctx, 2), dreal_mk_num(ctx, i)));
+        xt[i] = dreal_mk_times_2(ctx, x[i+rr], dreal_mk_num(ctx, pow(2.0, i)));
+    }
+    for(unsigned i=num-rr; i<num; i++){
+        xt[i] = dreal_mk_times_2(ctx, x[num-1], dreal_mk_num(ctx, pow(2.0, i)));
     }
 
-    dreal_expr ast = dreal_mk_plus(ctx, xt, num-rr);
+    dreal_expr ast = dreal_mk_plus(ctx, xt, num);
+    delete[] xt;
+    return ast;
+}
+
+dreal_expr UnlinearVerify::dreal_mk_LSHR(dreal_context ctx, dreal_expr y, int rr, string name, unsigned num){
+    dreal_expr* xt = new dreal_expr[num];
+    vector<dreal_expr> x;
+
+    dreal_mk_tobv_expr(ctx, y, name, num, x);
+
+
+    for(unsigned i=0; i<num-rr; i++){
+        xt[i] = dreal_mk_times_2(ctx, x[i+rr], dreal_mk_num(ctx, pow(2.0, i)));
+    }
+    for(unsigned i=num-rr; i<num; i++){
+        xt[i] = dreal_mk_num(ctx, 0);
+    }
+
+    dreal_expr ast = dreal_mk_plus(ctx, xt, num);
+    delete[] xt;
     return ast;
 }
 
@@ -453,54 +415,30 @@ dreal_expr UnlinearVerify::dreal_mk_SHL(dreal_context ctx, dreal_expr y, int rr,
     dreal_expr* xt = new dreal_expr[num];
     vector<dreal_expr> x;
 
-    for(unsigned i=0;i<num;i++){
-        string tname = name+"_t"+ConvertToString(i);
-        x.push_back(dreal_mk_int_var(ctx, tname.c_str(), 0, 1));
-        xt[i] = dreal_mk_times_2(ctx, x[i], dreal_mk_pow(ctx, dreal_mk_num(ctx, 2), dreal_mk_num(ctx, i)));
-    }
-    dreal_expr ast_t = dreal_mk_eq(ctx, y, dreal_mk_plus(ctx, xt, num));
-    
-    if(outMode==1){
-        dreal_print_expr(ast_t);
-        cerr<< endl;
-    }
-    dreal_assert(ctx, ast_t);
+    dreal_mk_tobv_expr(ctx, y, name, num, x);
 
-    delete xt;
-    xt = new dreal_expr[num-rr];
-    for(unsigned i=0; i<num-rr; i++){
-        xt[i] = dreal_mk_times_2(ctx, x[i], dreal_mk_pow(ctx, dreal_mk_num(ctx, 2), dreal_mk_num(ctx, i+rr)));
+
+    for(unsigned i=0; (int)i<rr; i++){
+        xt[i] = dreal_mk_num(ctx, 0);
+    }
+    for(unsigned i=rr; i<num; i++){
+        xt[i] = dreal_mk_times_2(ctx, x[i-rr], dreal_mk_num(ctx, pow(2.0, i)));
     }
 
-    dreal_expr ast = dreal_mk_plus(ctx, xt, num-rr);
+    dreal_expr ast = dreal_mk_plus(ctx, xt, num);
+    delete[] xt;
     return ast;
-}
-
-dreal_expr UnlinearVerify::dreal_mk_INT_cmp(dreal_context ctx, dreal_expr y, dreal_expr z, Op_m pvop, string name){
-    dreal_expr cmp;
-    switch(pvop){
-        case lt:cmp = dreal_mk_lt(ctx, y, z);break;
-        case le:cmp = dreal_mk_leq(ctx, y, z);break;
-        case gt:cmp = dreal_mk_gt(ctx, y, z);break;
-        case ge:cmp = dreal_mk_geq(ctx, y, z);break;
-        case eq:cmp = dreal_mk_eq(ctx, y, z);break;
-        case ne:cmp = dreal_mk_not(ctx, dreal_mk_eq(ctx, y, z));break;
-        default:errs()<<"UnlinearVerify::dreal_mk_INT_cmp error\n";
-    }
-    dreal_expr assign = dreal_mk_ite(ctx, cmp, dreal_mk_num(ctx, 1), dreal_mk_num(ctx, 0));
-    
-    return assign;
 }
 
 int UnlinearVerify::getCMP(int rl, int rr, Op_m pvop){
     bool cmp;
     switch(pvop){
-        case lt:cmp = (rl<rr);break;
-        case le:cmp = (rl<=rr);break;
-        case gt:cmp = (rl>rr);break;
-        case ge:cmp = (rl>=rr);break;
-        case eq:cmp = (rl==rr);break;
-        case ne:cmp = (rl!=rr);break;
+        case slt:case ult:case flt: cmp = (rl<rr);break;
+        case sle:case ule:case fle: cmp = (rl<=rr);break;
+        case sgt:case ugt:case fgt: cmp = (rl>rr);break;
+        case sge:case uge:case fge: cmp = (rl>=rr);break;
+        case eq:case feq:   cmp = (rl==rr);break;
+        case ne:case fne:   cmp = (rl!=rr);break;
         default:errs()<<"UnlinearVerify::getCMP error\n";
     }
     if(cmp)
@@ -508,15 +446,908 @@ int UnlinearVerify::getCMP(int rl, int rr, Op_m pvop){
     return 0;
 }
 
+///////////////////////////////////////BRICK-test////////////////////////////////////////////////////////////////////
+dreal_expr UnlinearVerify::getExpr(Variable *v, bool &treat, double &val, UnlinearVarTable *table){
+
+    dreal_expr Expr= NULL;
+
+    if(v->type==FPNUM||v->type==INTNUM){
+
+        val = v->getVal();
+        string valstr = double2string(val);
+        Expr = dreal_mk_num_from_string(ctx, valstr.c_str());
+    }
+    else if(v->type == INT || v->type==FP){
+        Expr = table->getX(v->ID);
+        treat = treat&table->getVal(v->ID, val);
+    }
+    else
+        assert(false && "GetExpr error : v->type error!!");
+    return Expr;
+}
+
+
+// generate the z3_ast of compare constraint()
+dreal_expr UnlinearVerify::mk_compare_ast(Constraint *con, UnlinearVarTable *table){
+    dreal_expr exprl; 
+    dreal_expr exprr;
+    dreal_expr ast=NULL; 
+    Operator op = con->op;
+
+    ParaVariable lpv = con->lpvList;
+    ParaVariable rpv = con->rpvList;
+
+    assert(!lpv.isExp && "Mk_compare_ast error: lpv isExp!!!");
+    assert(!rpv.isExp && "Mk_compare_ast error: rpv isExp!!!");
+
+
+    Variable *lv = table->getAlias(lpv.rvar);
+    Variable *rv = table->getAlias(rpv.rvar);
+
+    assert(lv->numbits==rv->numbits && "Mk_compare_ast error: Numbits is different!!");
+
+    int ID1 = lv->ID;
+    int ID2 = rv->ID;
+            
+    double lval,rval;
+    if(lv->type == PTR){
+        assert((op==EQ||op==NE) && "Mk_compare_ast with ptr type error!!");
+        if(!table->getVal(ID1,lval)){
+            // errs()<<"GetVal error "<<ID1<<"\t"<<cfg->variableList[ID1].name<<"\n";
+            assert(false && "Mk_compare_ast lval getVal error!!");
+        }
+        if(!table->getVal(ID2,rval)){
+            // errs()<<"1.LT GetVal error "<<ID2<<"\t"<<cfg->variableList[ID2].name<<"\n";
+            assert(false && "Mk_compare_ast rval getVal error!!");
+        }
+        exprl = dreal_mk_num(ctx, (int)lval);
+        exprr = dreal_mk_num(ctx, (int)rval);
+    }
+    else{
+        bool treat = false;
+        exprl = getExpr(lv, treat, lval, table);
+        exprr = getExpr(rv, treat, rval, table);
+    }
+
+    switch(op){
+        case EQ:case FEQ:    ast = dreal_mk_eq(ctx, exprl, exprr);break;
+        case NE:case FNE:    ast = dreal_mk_not(ctx, dreal_mk_eq(ctx, exprl, exprr));break;
+        case SLT:case ULT:case FLT:   ast = dreal_mk_lt(ctx, exprl, exprr);break;
+        case SLE:case ULE:case FLE:   ast = dreal_mk_leq(ctx, exprl, exprr);break;
+        case SGT:case UGT:case FGT:   ast = dreal_mk_gt(ctx, exprl, exprr);break;
+        case SGE:case UGE:case FGE:   ast = dreal_mk_geq(ctx, exprl, exprr);break;
+        default:    assert(false && "Operator type error!!");break;
+    }
+
+    return ast;
+}
+
+dreal_expr UnlinearVerify::mk_assignment_ast(Constraint *con, UnlinearVarTable *table, int time){
+    
+    dreal_expr ast=NULL; 
+    dreal_expr exprl; 
+    dreal_expr exprr;
+
+    ParaVariable lpv = con->lpvList;
+    ParaVariable rpv = con->rpvList;
+
+    assert(!lpv.isExp && "Mk_assignment_ast error: lpv is exp!!");
+            
+    Variable *lv = table->getAlias(lpv.rvar);
+
+    if(lv->type==PTR){
+        if(!rpv.isExp){
+            Variable *rv = table->getAlias(rpv.rvar);
+            assert(rv->type==PTR && "Mk_assignment_ast PTR error: Type of rv is not PTR!!");
+            table->setAlias(lv, rv);
+        }
+        else
+            ast = mk_ptr_operation_expr(lv, rpv, table);
+    }
+    else{
+        if(!rpv.isExp){
+
+            if(time>0)
+                table->setX(lv->ID, time, lv->type);
+            exprl = table->getX(lv->ID);
+
+            Variable *rv = table->getAlias(rpv.rvar);
+
+            if(rv->type==INTNUM||rv->type==FPNUM){
+
+                bool treat = true;
+                double val = 0;
+                exprr = getExpr(rv, treat, val, table);
+
+                table->setVal(lv->ID, val);
+            }
+            else{
+                exprr = table->getX(rv->ID);
+                double val = 0;
+
+                if(table->getVal(rv->ID, val))
+                    table->setVal(lv->ID, val);
+            }
+            ast = dreal_mk_eq(ctx, exprl, exprr);
+        }
+        else{
+
+            if(time>0)
+                table->setX(lv->ID, time, lv->type);
+            exprl = table->getX(lv->ID);
+
+            Op_m pvop = rpv.op;
+            switch(pvop){
+                case LOAD:{
+
+                    bool treat = true;
+                    double val=0;
+                    Variable *rvr = table->getAlias(rpv.rvar);
+                    if(!table->getVal(rvr->ID, val)){
+                        // errs()<<"2.LOAD GetVal error "<<rvr->ID<<"\t"<<cfg->variableList[rvr->ID].name<<"\n"; 
+                        assert(false && "Mk_assignment_ast LOAD error!!");
+                    }
+                    int rl = (int)val;
+                    int rr = table->load(rl);
+                    treat = table->getVal(rr, val);
+                    if(treat)
+                        table->setVal(lv->ID, val);
+                    exprr = table->getX(rr);
+                    ast = dreal_mk_eq(ctx, exprl, exprr);
+
+                    break;
+                }
+                case TRUNC:case ZEXT:case SEXT:case FPTRUNC:case FPEXT:case FPTOUI:case FPTOSI:case UITOFP:case SITOFP:case BITCAST:{
+                    ast = mk_convert_expr(lv, rpv, table, time);
+                    break;
+                }
+                case FADD:case ADD:case SUB:case FSUB:case MUL:case FMUL:case UDIV:case SDIV:case FDIV:
+                case UREM:case SREM:case FREM:
+                case LSHR:case ASHR:case SHL:case AND:case NAND:case OR:case XOR:{
+                    ast = mk_binaryop_expr(lv, rpv, table, time);
+                    break;
+                }
+                case ABS:case FABS:case SINH:case COSH:case TANH:case TAN:case ATAN:case ATAN2:
+                case SIN:case ASIN:case COS:case ACOS:case SQRT:case POW:case LOG:case LOG10:case EXP:{
+                    ast = mk_function_expr(lv, rpv, table, time);
+                    break;
+                }
+                case ISNAN:case ISINF:case ISNORMAL:case ISFINITE:case SIGNBIT:case CLASSIFY:{
+                    errs()<<"PVOP: "<<pvop<<"\n";
+                    assert(false && "Mk_assignment_ast error: Can't handle floating-point with unlinear constraints!!");
+                    break;
+                }
+                case eq:case ne:
+                case slt:case sle:case sgt:case sge:
+                case ult:case ule:case ugt:case uge:
+                case feq:case fne:
+                case flt:case fle:case fgt:case fge:{
+                    ast = mk_compare_expr(lv, rpv, table, time);
+                    break;
+                }
+                default:
+                    assert(false && "Mk_assignment_ast LOAD error: Op_m is not a unlinear operator!!");
+                    break;
+            }
+        }
+    }
+    
+    return ast;
+}
+
+dreal_expr UnlinearVerify::mk_ptr_operation_expr(Variable *lv, ParaVariable rpv, UnlinearVarTable *table){
+    Op_m pvop = rpv.op;
+    dreal_expr Expr=NULL;
+    switch(pvop){
+        case ALLOCA:{
+            //  a = alloca
+            //  PTR     exprid
+            //  a       allocaID(initial as -2)
+            int allocaID = table->alloca();
+            table->setVal(lv->ID, allocaID);
+            break;
+        }
+        case LOAD:{
+            //  a = Load b
+            //  PTR     exprid
+            //  b       allocaID
+            ///////////////////////////////
+            //  expr    alias
+            //  a       allocaID
+            Variable *rv = table->getAlias(rpv.rvar);
+            double val = 0;
+            if(!table->getVal(rv->ID, val)){
+                // errs()<<"0.LOAD GetVal error "<<rv->ID<<"\t"<<cfg->variableList[rv->ID].name<<"\n";
+                assert(false && "Mk_ptr_operation_expr LOAD GetVal error!!");
+            }  
+
+            int allocaID = (int)val;
+//          errs()<<"0.2 LOAD : "<<*con<<"\n";
+            int addr = table->load(allocaID);
+            if(addr>=0){
+                Variable *rvr = table->getAlias(addr);
+                table->setAlias(lv->ID, rvr->ID);
+            }
+            break;
+        }
+        case STORE:{
+            //  a = store b
+            //  PTR     exprid
+            //  a       b.exprid
+            double val = 0;
+            if(!table->getVal(lv->ID, val)){
+                // errs()<<"Verifi store error "<<lv->ID<<"\t"<<lv->name<<"\n";
+                assert(false && "Mk_ptr_operation_expr STORE GetVal error!!");
+            }
+            int allocaID = (int)val;
+            Variable *rv = table->getAlias(rpv.rvar);
+            table->store(allocaID, rv->ID);
+            break;
+        }
+        case ADDR:{
+            //  a = addr b
+            //  PTR     allocaID
+            //  a       b.exprid
+            Variable *rv = table->getAlias(rpv.rvar);
+            double rvrval = 0;
+            table->setVal(lv->ID, rv->ID);
+            if(!table->getVal(lv->ID,rvrval)){
+                // errs()<<"Verifi ADDR error "<<*con<<"\t"<<rv->ID<<"\n";
+                assert(false && "Mk_ptr_operation_expr ADDR GetVal error!!");
+            }
+            break;
+        }
+        case GETPTR:{
+            //  c = a GETPTR a_0 a_1 a_2 .... e.g.
+            //  c = a GETPTR 0 1 2
+            //  PTR     PTR     PTR
+            //  a   ->  a_0 
+            //      ->  a_1 ->  a_1_0
+            //              ->  a_1_1
+            //              ->  a_1_2
+            /////////////////////////////////////////
+            //  PTR     alias
+            //  c       a_1_2
+            Variable *rv = table->getAlias(rpv.varList[0]);
+            double val = 0;
+            int aliasID = rv->ID;
+            for(unsigned i=1;i<rpv.varList.size()-1;i++){
+                rv = table->getAlias(rpv.varList[i]);
+                if(table->getVal(rv, val)){
+                    aliasID+=val;
+                    if(!table->getVal(aliasID, val)){
+                        // errs()<<"0. Verifi GETPTR error "<<*con<<"\t"<<aliasID<<"\t"<<cfg->variableList[aliasID]<<"\n";
+                        assert(false && "Mk_ptr_operation_expr aliasID GETPTR GetVal error!!");
+                    }
+                    aliasID = val;
+                }
+                else{
+                    // errs()<<"1. Verifi GETPTR error "<<*con<<"\t"<<rv->ID<<"\n";
+                    assert(false && "Mk_ptr_operation_expr rv GETPTR GetVal error!!");
+                }
+            }
+            rv = table->getAlias(rpv.varList.back());
+            if(table->getVal(rv, val)){
+                aliasID+=val;
+                table->setAlias(lv->ID, aliasID);
+            }
+            else{
+                // errs()<<"2. Verifi GETPTR error "<<*con<<"\t"<<rv->ID<<"\n";
+                assert(false && "Mk_ptr_operation_expr rv GETPTR GetVal error!!");
+            }
+            break;
+        }
+        default:   
+            assert(false && "Mk_ptr_operation_expr rpv.op error!!"); 
+            break;
+    }
+
+    return Expr;
+}
+
+dreal_expr UnlinearVerify::mk_convert_expr(Variable *lv, ParaVariable rpv, UnlinearVarTable *table, int time){
+
+    dreal_expr exprl; 
+
+    Op_m pvop = rpv.op;
+    
+    if(time>0)
+        table->setX(lv->ID, time, lv->type);
+    exprl = table->getX(lv->ID);
+
+    Variable *rv = table->getAlias(rpv.rvar);
+
+    bool treat = true;
+    double rval = 0;
+    dreal_expr rv_expr = getExpr(rv, treat, rval, table);
+
+    dreal_expr ast=NULL;
+    switch(pvop){
+        case TRUNC:{
+            //truncate a large size bit-vector to a small size bit-vector
+            assert(lv->type==INT && "Mk_convert_expr TRUNC error: lv is not integer type!!");
+            assert(rv->type==INT && "Mk_convert_expr TRUNC error: rv is not integer type!!");
+            assert(lv->numbits<rv->numbits && "Mk_convert_expr TRUNC error: lv numbits is larger than rv!!");
+
+            ast = dreal_mk_eq(ctx, exprl, rv_expr);
+            break;
+        }
+        case ZEXT:{
+            //Extend small size bit-vector with zeros to large size bit-vector 
+            assert(lv->type==INT && "Mk_convert_expr ZEXT error: lv is not integer type!!");
+            assert(rv->type==INT && "Mk_convert_expr ZEXT error: rv is not integer type!!");
+            assert(lv->numbits>rv->numbits && "Mk_convert_expr ZEXT error: lv numbits is smaller than rv!!");
+
+            ast = dreal_mk_eq(ctx, exprl, rv_expr);
+            break;
+        }
+        case SEXT:{
+            //Extend small size bit-vector with sign bit to large size bit-vector 
+            assert(lv->type==INT && "Mk_convert_expr SEXT error: lv is not integer type!!");
+            assert(rv->type==INT && "Mk_convert_expr SEXT error: rv is not integer type!!");
+            assert(lv->numbits>rv->numbits && "Mk_convert_expr SEXT error: lv numbits is smaller than rv!!");
+
+            ast = dreal_mk_eq(ctx, exprl, rv_expr);
+            break;
+        }
+        case FPTRUNC:{
+            //truncate a large size float point type to a small size float point type
+            //i.e. convert double to float now
+            assert((lv->type==FP && lv->numbits==32) && "Mk_convert_expr FPTRUNC error: lv is not float type!!");
+            assert((rv->type==FP && rv->numbits==64) && "Mk_convert_expr FPTRUNC error: rv is not double type!!");
+            assert(lv->numbits<rv->numbits && "Mk_convert_expr FPTRUNC error: lv numbits is larger than rv!!");
+            
+            ast = dreal_mk_eq(ctx, exprl, rv_expr);
+            break;
+        }
+        case FPEXT:{
+            //extend a small size float point  type to a large size float point type
+            //i.e. convert float to double now
+            assert((lv->type==FP && lv->numbits==64) && "Mk_convert_expr FPEXT error: lv is not double type!!");
+            assert((rv->type==FP && rv->numbits==32) && "Mk_convert_expr FPEXT error: rv is not float type!!");
+            assert(lv->numbits>rv->numbits && "Mk_convert_expr FPEXT error: lv numbits is smaller than rv!!");
+            
+            ast = dreal_mk_eq(ctx, exprl, rv_expr);
+            break;
+        }
+        case FPTOUI:{
+            //Conversion of a floating-point term into an unsigned bit-vector.
+            assert(lv->type==INT && "Mk_convert_expr FPTOUI error: lv is not integer type!!");
+            assert(rv->type==FP && "Mk_convert_expr FPTOUI error: rv is not float type!!");
+
+            dreal_expr exprl_t = dreal_mk_unbounded_int_var(ctx, (lv->name+"/t").c_str());
+            dreal_expr ast_tleq_pos = dreal_mk_leq(ctx, exprl, rv_expr);
+            dreal_expr ast_tgt_pos = dreal_mk_gt(ctx, exprl, dreal_mk_minus(ctx, rv_expr, dreal_mk_num(ctx, 1)));
+            dreal_expr ast_and_pos = dreal_mk_and_2(ctx, ast_tleq_pos, ast_tgt_pos);
+            dreal_expr ast_tgeq_neg = dreal_mk_geq(ctx, exprl_t, rv_expr);
+            dreal_expr ast_tlt_neg = dreal_mk_gt(ctx, exprl_t, dreal_mk_plus_2(ctx, rv_expr, dreal_mk_num(ctx, 1)));
+            dreal_expr ast_assign_neg = dreal_mk_eq(ctx, exprl, dreal_mk_minus(ctx, dreal_mk_num(ctx, pow(2.0, lv->numbits)), exprl_t));
+            dreal_expr ast_and_neg = dreal_mk_and_3(ctx, ast_tgeq_neg, ast_tlt_neg, ast_assign_neg);
+
+            ast = dreal_mk_ite(ctx, dreal_mk_leq(ctx, rv_expr, dreal_mk_num(ctx, 0)), ast_and_neg, ast_and_pos);
+            rval = (unsigned)rval;
+            // assert(false && "Mk_convert_expr FPTOUI error: FPTOUI can't handle with unlinear constraints yet!!");
+            break;
+        }
+        case FPTOSI:{
+            //Conversion of a floating-point term into a signed bit-vector.
+            assert(lv->type==INT && "Mk_convert_expr FPTOSI error: lv is not integer type!!");
+            assert(rv->type==FP && "Mk_convert_expr FPTOSI error: rv is not float type!!");
+
+            
+            dreal_expr ast_tleq_pos = dreal_mk_leq(ctx, exprl, rv_expr);
+            dreal_expr ast_tgt_pos = dreal_mk_gt(ctx, exprl, dreal_mk_minus(ctx, rv_expr, dreal_mk_num(ctx, 1)));
+            dreal_expr ast_and_pos = dreal_mk_and_2(ctx, ast_tleq_pos, ast_tgt_pos);
+            dreal_expr ast_tgeq_neg = dreal_mk_geq(ctx, exprl, rv_expr);
+            dreal_expr ast_tlt_neg = dreal_mk_gt(ctx, exprl, dreal_mk_plus_2(ctx, rv_expr, dreal_mk_num(ctx, 1)));
+            dreal_expr ast_and_neg = dreal_mk_and_2(ctx, ast_tgeq_neg, ast_tlt_neg);
+
+            ast = dreal_mk_ite(ctx, dreal_mk_leq(ctx, rv_expr, dreal_mk_num(ctx, 0)), ast_and_neg, ast_and_pos);
+            rval = (int)rval;
+            break;
+        }
+        case UITOFP:{
+            //Conversion of a 2's complement unsigned bit-vector term into a term of Float Point sort.
+            assert(lv->type==FP && "Mk_convert_expr UITOFP error: lv is not float type!!");
+            assert(rv->type==INT && "Mk_convert_expr UITOFP error: rv is not integer type!!");
+
+            ast = dreal_mk_eq(ctx, exprl, rv_expr);
+            break;
+        }
+        case SITOFP:{
+            //Conversion of a 2's complement signed bit-vector term into a term of Float Point sort.
+            assert(lv->type==FP && "Mk_convert_expr SITOFP error: lv is not float type!!");
+            assert(rv->type==INT && "Mk_convert_expr SITOFP error: rv is not integer type!!");
+
+            ast = dreal_mk_eq(ctx, exprl, rv_expr);
+            break;
+        }
+        case BITCAST:{
+            assert(lv->numbits==rv->numbits && "Mk_convert_expr BITCAST error: Have different size type!!");
+
+            assert(false && "Mk_convert_expr BITCAST error: Bitcast with Unlinear constraints can't handle yet!!");
+            break;
+        }
+        default:
+            assert(false && "Mk_convert_expr error: Op_m is not a conversion Operator!!");
+            break;
+    }
+
+    if(treat)
+        table->setVal(lv->ID, rval);
+
+    return ast;
+}
+
+dreal_expr UnlinearVerify::mk_binaryop_expr(Variable *lv, ParaVariable rpv, UnlinearVarTable *table, int time){
+
+    dreal_expr exprl; 
+    dreal_expr exprr;
+    assert(rpv.isExp && "Mk_binaryop_expr error: rpv is not a expression!!");
+
+    Op_m pvop = rpv.op;
+    
+    if(time>0)
+        table->setX(lv->ID, time, lv->type);
+    exprl = table->getX(lv->ID);
+
+    Variable *rvl = table->getAlias(rpv.lvar);
+    Variable *rvr = table->getAlias(rpv.rvar);
+
+    bool treat = true;
+    double rvlval = 0;
+    double rvrval = 0;
+    double rval = 0;
+    dreal_expr rvl_expr = getExpr(rvl, treat, rvlval, table);
+    dreal_expr rvr_expr = getExpr(rvr, treat, rvrval, table);
+
+    switch(pvop){
+        case ADD:{
+            assert(lv->type==INT && "Mk_binaryop_expr ADD error: lv is not a interger type!!");
+            assert((rvl->type==INT||rvl->type==INTNUM) && "Mk_binaryop_expr ADD error: rvl is not a interger type!!");
+            assert((rvr->type==INT||rvr->type==INTNUM) && "Mk_binaryop_expr ADD error: rvr is not a interger type!!");
+            assert(rvl->numbits==rvr->numbits && "Mk_binaryop_expr ADD error: rvl and rvr have different interger type!!");
+
+            exprr = dreal_mk_plus_2(ctx, rvl_expr, rvr_expr);
+
+            if(treat)
+                rval = (int)rvlval+(int)rvrval;
+            break;
+        }
+        case SUB:{
+            assert(lv->type==INT && "Mk_binaryop_expr SUB error: lv is not a interger type!!");
+            assert((rvl->type==INT||rvl->type==INTNUM) && "Mk_binaryop_expr SUB error: rvl is not a interger type!!");
+            assert((rvr->type==INT||rvr->type==INTNUM) && "Mk_binaryop_expr SUB error: rvr is not a interger type!!");
+            assert(rvl->numbits==rvr->numbits && "Mk_binaryop_expr SUB error: rvl and rvr have different interger type!!");
+
+            exprr = dreal_mk_minus(ctx, rvl_expr, rvr_expr);
+
+            if(treat)
+                rval = (int)rvlval-(int)rvrval;
+            break;
+        }
+        case MUL:{
+            assert(lv->type==INT && "Mk_binaryop_expr MUL error: lv is not a interger type!!");
+            assert((rvl->type==INT||rvl->type==INTNUM) && "Mk_binaryop_expr MUL error: rvl is not a interger type!!");
+            assert((rvr->type==INT||rvr->type==INTNUM) && "Mk_binaryop_expr MUL error: rvr is not a interger type!!");
+            assert(rvl->numbits==rvr->numbits && "Mk_binaryop_expr MUL error: rvl and rvr have different interger type!!");
+
+            exprr = dreal_mk_times_2(ctx, rvl_expr, rvr_expr);
+
+            if(treat)
+                rval = (int)rvlval*(int)rvrval;
+            break;
+        }
+        case UDIV:{
+            assert(lv->type==INT && "Mk_binaryop_expr UDIV error: lv is not a interger type!!");
+            assert((rvl->type==INT||rvl->type==INTNUM) && "Mk_binaryop_expr UDIV error: rvl is not a interger type!!");
+            assert((rvr->type==INT||rvr->type==INTNUM) && "Mk_binaryop_expr UDIV error: rvr is not a interger type!!");
+            assert(rvl->numbits==rvr->numbits && "Mk_binaryop_expr UDIV error: rvl and rvr have different interger type!!");
+
+            exprr = dreal_mk_div(ctx, rvl_expr, rvr_expr);
+
+            if(treat)
+                rval = (unsigned)rvlval/(unsigned)rvrval;
+            break;
+        }
+        case SDIV:{
+            assert(lv->type==INT && "Mk_binaryop_expr SDIV error: lv is not a interger type!!");
+            assert((rvl->type==INT||rvl->type==INTNUM) && "Mk_binaryop_expr SDIV error: rvl is not a interger type!!");
+            assert((rvr->type==INT||rvr->type==INTNUM) && "Mk_binaryop_expr SDIV error: rvr is not a interger type!!");
+            assert(rvl->numbits==rvr->numbits && "Mk_binaryop_expr SDIV error: rvl and rvr have different interger type!!");
+
+            exprr = dreal_mk_div(ctx, rvl_expr, rvr_expr);
+
+            if(treat)
+                rval = (int)rvlval/(int)rvrval;
+            break;
+        }
+        case FADD:{
+            assert(lv->type==FP && "Mk_binaryop_expr FADD error: lv is not a float point type!!");
+            assert((rvl->type==FP||rvl->type==FPNUM) && "Mk_binaryop_expr FADD error: rvl is not a float point type!!");
+            assert((rvr->type==FP||rvr->type==FPNUM) && "Mk_binaryop_expr FADD error: rvr is not a float point type!!");
+            assert(rvl->numbits==rvr->numbits && "Mk_binaryop_expr FADD error: rvl and rvr have different float point type!!");
+
+            exprr = dreal_mk_plus_2(ctx, rvl_expr, rvr_expr);
+
+            if(treat)
+                rval = rvlval+rvrval;
+            break;
+        }
+        case FSUB:{
+            assert(lv->type==FP && "Mk_binaryop_expr FSUB error: lv is not a float point type!!");
+            assert((rvl->type==FP||rvl->type==FPNUM) && "Mk_binaryop_expr FSUB error: rvl is not a float point type!!");
+            assert((rvr->type==FP||rvr->type==FPNUM) && "Mk_binaryop_expr FSUB error: rvr is not a float point type!!");
+            assert(rvl->numbits==rvr->numbits && "Mk_binaryop_expr FSUB error: rvl and rvr have different float point type!!");
+
+            exprr = dreal_mk_minus(ctx, rvl_expr, rvr_expr);
+
+            if(treat)
+                rval = rvlval-rvrval;
+            break;
+        }
+        case FMUL:{
+            assert(lv->type==FP && "Mk_binaryop_expr FMUl error: lv is not a float point type!!");
+            assert((rvl->type==FP||rvl->type==FPNUM) && "Mk_binaryop_expr FMUl error: rvl is not a float point type!!");
+            assert((rvr->type==FP||rvr->type==FPNUM) && "Mk_binaryop_expr FMUl error: rvr is not a float point type!!");
+            assert(rvl->numbits==rvr->numbits && "Mk_binaryop_expr FMUl error: rvl and rvr have different float point type!!");
+
+            exprr = dreal_mk_times_2(ctx, rvl_expr, rvr_expr);
+
+            if(treat)
+                rval = rvlval*rvrval;
+            break;
+        }
+        case FDIV:{
+            assert(lv->type==FP && "Mk_binaryop_expr FDIV error: lv is not a float point type!!");
+            assert((rvl->type==FP||rvl->type==FPNUM) && "Mk_binaryop_expr FDIV error: rvl is not a float point type!!");
+            assert((rvr->type==FP||rvr->type==FPNUM) && "Mk_binaryop_expr FDIV error: rvr is not a float point type!!");
+            assert(rvl->numbits==rvr->numbits && "Mk_binaryop_expr FDIV error: rvl and rvr have different float point type!!");
+
+            exprr = dreal_mk_div(ctx, rvl_expr, rvr_expr);
+
+            if(treat)
+                rval = rvlval/rvrval;
+            break;
+        }
+        case UREM:{
+            assert(lv->type==INT && "Mk_binaryop_expr UREM error: lv is not a interger type!!");
+            assert((rvl->type==INT||rvl->type==INTNUM) && "Mk_binaryop_expr UREM error: rvl is not a interger type!!");
+            assert((rvr->type==INT||rvr->type==INTNUM) && "Mk_binaryop_expr UREM error: rvr is not a interger type!!");
+            assert(rvl->numbits==rvr->numbits && "Mk_binaryop_expr UREM error: rvl and rvr have different interger type!!");
+
+            exprr = dreal_mk_REM(ctx, rvl_expr, rvr_expr, lv->name);
+
+            if(treat)
+                rval = (unsigned)rvlval%(unsigned)rvrval;
+            break;
+        }
+        case SREM:{
+            assert(lv->type==INT && "Mk_binaryop_expr SREM error: lv is not a interger type!!");
+            assert((rvl->type==INT||rvl->type==INTNUM) && "Mk_binaryop_expr SREM error: rvl is not a interger type!!");
+            assert((rvr->type==INT||rvr->type==INTNUM) && "Mk_binaryop_expr SREM error: rvr is not a interger type!!");
+            assert(rvl->numbits==rvr->numbits && "Mk_binaryop_expr SREM error: rvl and rvr have different interger type!!");
+
+            exprr = dreal_mk_REM(ctx, rvl_expr, rvr_expr, lv->name);
+
+            if(treat)
+                rval = (int)rvlval%(int)rvrval;
+            break;
+        }
+        case FREM:{
+            assert(lv->type==FP && "Mk_binaryop_expr FREM error: lv is not a float point type!!");
+            assert((rvl->type==FP||rvl->type==FPNUM) && "Mk_binaryop_expr FREM error: rvl is not a float point type!!");
+            assert((rvr->type==FP||rvr->type==FPNUM) && "Mk_binaryop_expr FREM error: rvr is not a float point type!!");
+            assert(rvl->numbits==rvr->numbits && "Mk_binaryop_expr FREM error: rvl and rvr have different float point type!!");
+
+            exprr = dreal_mk_REM(ctx, rvl_expr, rvr_expr, lv->name);
+
+            treat = false;
+            break;
+        }
+        case LSHR:{
+            assert(lv->type==INT && "Mk_binaryop_expr LSHR error: lv is not a interger type!!");
+            assert((rvl->type==INT||rvl->type==INTNUM) && "Mk_binaryop_expr LSHR error: rvl is not a interger type!!");
+            assert((rvr->type==INT||rvr->type==INTNUM) && "Mk_binaryop_expr LSHR error: rvr is not a interger type!!");
+            assert(rvl->numbits==rvr->numbits && "Mk_binaryop_expr LSHR error: rvl and rvr have different interger type!!");
+
+            if(!treat)
+                assert(false && "Mk_binaryop_expr LSHR error: can't handle LSHR with unlinear constraints!!");
+            exprr = dreal_mk_LSHR(ctx, rvl_expr, (int)rvrval, rvl->name, rvl->numbits);
+            treat = false;
+            break;
+        }
+        case ASHR:{
+            assert(lv->type==INT && "Mk_binaryop_expr ASHR error: lv is not a interger type!!");
+            assert((rvl->type==INT||rvl->type==INTNUM) && "Mk_binaryop_expr ASHR error: rvl is not a interger type!!");
+            assert((rvr->type==INT||rvr->type==INTNUM) && "Mk_binaryop_expr ASHR error: rvr is not a interger type!!");
+            assert(rvl->numbits==rvr->numbits && "Mk_binaryop_expr ASHR error: rvl and rvr have different interger type!!");
+
+            if(!treat)
+                assert(false && "Mk_binaryop_expr ASHR error: can't handle ASHR with unlinear constraints!!");
+            exprr = dreal_mk_ASHR(ctx, rvl_expr, (int)rvrval, rvl->name, rvl->numbits);
+            treat = false;
+            break;
+        }
+        case SHL:{
+            assert(lv->type==INT && "Mk_binaryop_expr SHL error: lv is not a interger type!!");
+            assert((rvl->type==INT||rvl->type==INTNUM) && "Mk_binaryop_expr SHL error: rvl is not a interger type!!");
+            assert((rvr->type==INT||rvr->type==INTNUM) && "Mk_binaryop_expr SHL error: rvr is not a interger type!!");
+            assert(rvl->numbits==rvr->numbits && "Mk_binaryop_expr SHL error: rvl and rvr have different interger type!!");
+
+            
+            if(!treat)
+                assert(false && "Mk_binaryop_expr SHL error: can't handle SHL with unlinear constraints!!");
+            exprr = dreal_mk_SHL(ctx, rvl_expr, (int)rvrval, rvl->name, rvl->numbits);
+            treat = false;
+            break;
+        }
+        case AND:{
+            assert(lv->type==INT && "Mk_binaryop_expr AND error: lv is not a interger type!!");
+            assert((rvl->type==INT||rvl->type==INTNUM) && "Mk_binaryop_expr AND error: rvl is not a interger type!!");
+            assert((rvr->type==INT||rvr->type==INTNUM) && "Mk_binaryop_expr AND error: rvr is not a interger type!!");
+            assert(rvl->numbits==rvr->numbits && "Mk_binaryop_expr AND error: rvl and rvr have different interger type!!");
+
+            exprr = dreal_mk_AND(ctx, rvl_expr, rvr_expr, rvl->name, rvr->name, rvl->numbits);
+            treat = false;
+            break;
+        }
+        case NAND:{
+            assert(lv->type==INT && "Mk_binaryop_expr NAND error: lv is not a interger type!!");
+            assert((rvl->type==INT||rvl->type==INTNUM) && "Mk_binaryop_expr NAND error: rvl is not a interger type!!");
+            assert((rvr->type==INT||rvr->type==INTNUM) && "Mk_binaryop_expr NAND error: rvr is not a interger type!!");
+            assert(rvl->numbits==rvr->numbits && "Mk_binaryop_expr NAND error: rvl and rvr have different interger type!!");
+
+            exprr = dreal_mk_NAND(ctx, rvl_expr, rvr_expr, rvl->name, rvr->name, rvl->numbits);
+            treat = false;
+            break;
+        }
+        case OR:{
+            assert(lv->type==INT && "Mk_binaryop_expr OR error: lv is not a interger type!!");
+            assert((rvl->type==INT||rvl->type==INTNUM) && "Mk_binaryop_expr OR error: rvl is not a interger type!!");
+            assert((rvr->type==INT||rvr->type==INTNUM) && "Mk_binaryop_expr OR error: rvr is not a interger type!!");
+            assert(rvl->numbits==rvr->numbits && "Mk_binaryop_expr OR error: rvl and rvr have different interger type!!");
+
+            exprr = dreal_mk_OR(ctx, rvl_expr, rvr_expr, rvl->name, rvr->name, rvl->numbits);
+            treat = false;
+            break;
+        }
+        case XOR:{
+            assert(lv->type==INT && "Mk_binaryop_expr XOR error: lv is not a interger type!!");
+            assert((rvl->type==INT||rvl->type==INTNUM) && "Mk_binaryop_expr XOR error: rvl is not a interger type!!");
+            assert((rvr->type==INT||rvr->type==INTNUM) && "Mk_binaryop_expr XOR error: rvr is not a interger type!!");
+            assert(rvl->numbits==rvr->numbits && "Mk_binaryop_expr XOR error: rvl and rvr have different interger type!!");
+
+            exprr = dreal_mk_XOR(ctx, rvl_expr, rvr_expr, rvl->name, rvr->name, rvl->numbits);
+            treat = false;
+            break;
+        }
+        default:
+            assert(false && "Mk_binaryop_expr error: Op_m is not a binary operator!!");
+            break;
+    }
+
+    if(treat)
+        table->setVal(lv->ID, rval);
+
+    return dreal_mk_eq(ctx, exprl, exprr);;
+}
+
+
+dreal_expr UnlinearVerify::mk_compare_expr(Variable *lv, ParaVariable rpv, UnlinearVarTable *table, int time){
+    assert(rpv.isExp && "Mk_compare_expr error: rpv is not a expression!!");
+
+    assert((lv->type==INT&&lv->numbits==1) && "Mk_compare_expr error: lv is not a i1 type!!");
+
+    Op_m pvop = rpv.op;
+    
+    if(time>0)
+        table->setX(lv->ID, time, lv->type);
+    dreal_expr exprl = table->getX(lv->ID);
+
+    Variable *rvl = table->getAlias(rpv.lvar);
+    Variable *rvr = table->getAlias(rpv.rvar);
+
+    bool treat = true;
+    double rvlval = 0;
+    double rvrval = 0;
+    double rval = 0;
+    dreal_expr y = getExpr(rvl, treat, rvlval, table);
+    dreal_expr z = getExpr(rvr, treat, rvrval, table);
+    dreal_expr cmp;
+    switch(pvop){
+        case slt:case ult:case flt:
+            cmp = dreal_mk_lt(ctx, y, z);break;
+        case sle:case ule:case fle:
+            cmp = dreal_mk_leq(ctx, y, z);break;
+        case sgt:case ugt:case fgt:
+            cmp = dreal_mk_gt(ctx, y, z);break;
+        case sge:case uge:case fge:
+            cmp = dreal_mk_geq(ctx, y, z);break;
+        case eq:case feq:
+            cmp = dreal_mk_eq(ctx, y, z);break;
+        case ne:case fne:
+            cmp = dreal_mk_not(ctx, dreal_mk_eq(ctx, y, z));break;
+        default:errs()<<"UnlinearVerify::dreal_mk_INT_cmp error\n";
+    }
+    
+    if(treat){
+        rval = getCMP(rvlval, rvrval, pvop);
+        table->setVal(lv->ID, rval);
+    }
+    dreal_expr assign = dreal_mk_ite(ctx, cmp, 
+                                    dreal_mk_eq(ctx, exprl, dreal_mk_num(ctx, 1)),
+                                     dreal_mk_eq(ctx, exprl, dreal_mk_num(ctx, 0)));
+    
+    return assign;
+}
+
+dreal_expr UnlinearVerify::mk_function_expr(Variable *lv, ParaVariable rpv, UnlinearVarTable *table, int time){
+    dreal_expr exprl;
+    dreal_expr exprr;
+    assert(rpv.isExp && "Mk_compare_expr error: rpv is not a expression!!");
+
+    Op_m pvop = rpv.op;
+    
+    if(time>0)
+        table->setX(lv->ID, time, lv->type);
+    exprl = table->getX(lv->ID);
+
+    Variable *rv = table->getAlias(rpv.rvar);
+
+
+    bool treat = true;
+    double rval = 0;
+    dreal_expr rv_expr = getExpr(rv, treat, rval, table);
+
+    switch(pvop){
+        case ABS:{
+            assert(rv->type==INT||rv->type==INTNUM && "Mk_function_expr ABS error: rv is not an integer type!!");
+            exprr = dreal_mk_abs(ctx, rv_expr);
+            break;
+        }
+        case FABS:{
+            assert(rv->type==FP||rv->type==FPNUM && "Mk_function_expr FABS error: rv is not a float point type!!");
+            exprr = dreal_mk_abs(ctx, rv_expr);
+            break;
+        }
+        case ISNAN:{
+            assert(rv->type==FP||rv->type==FPNUM && "Mk_function_expr ISNAN error: rv is not a float point type!!");
+            assert(false && "Mk_function_expr ISNAN error: Can't handle isnan with unlinear constraints!!");
+            break;
+        }
+        case ISINF:{
+            assert(rv->type==FP||rv->type==FPNUM && "Mk_function_expr ISINF error: rv is not a float point type!!");
+            assert(false && "Mk_function_expr ISINF error: Can't handle isinf with unlinear constraints!!");
+            break;
+        }
+        case ISNORMAL:{
+            assert(rv->type==FP||rv->type==FPNUM && "Mk_function_expr ISNORMAL error: rv is not a float point type!!");
+            assert(false && "Mk_function_expr ISNORMAL error: Can't handle isnormal with unlinear constraints!!");
+            break;
+        }
+        case ISFINITE:{
+            assert(rv->type==FP||rv->type==FPNUM && "Mk_function_expr ISFINITE error: rv is not a float point type!!");
+            assert(false && "Mk_function_expr ISFINITE error: Can't handle isfinite with unlinear constraints!!");
+            break;
+        }
+        case SIGNBIT:{
+            assert(rv->type==FP||rv->type==FPNUM && "Mk_function_expr SIGNBIT error: rv is not an integer type!!");
+            dreal_expr is_negative = dreal_mk_lt(ctx, rv_expr, dreal_mk_num(ctx, 0));
+            exprr = dreal_mk_ite(ctx, is_negative, dreal_mk_num(ctx, 1), dreal_mk_num(ctx, 0));
+            break;
+        }
+        case CLASSIFY:{
+            assert(rv->type==FP||rv->type==FPNUM && "Mk_function_expr CLASSIFY error: rv is not an integer type!!");
+            assert(false && "Mk_function_expr CLASSIFY error: Can't handle classify with unlinear constraints!!");
+            break;
+        }
+        case SINH:{
+            exprr = dreal_mk_sinh(ctx, rv_expr);
+            break;
+        }
+        case COSH:{
+            exprr = dreal_mk_cosh(ctx, rv_expr);
+            break;
+        }
+        case TANH:{
+            exprr = dreal_mk_tanh(ctx, rv_expr);
+            break;
+        }
+        case TAN:{
+            exprr = dreal_mk_tan(ctx, rv_expr);
+            break;
+        }
+        case ATAN:{
+            exprr = dreal_mk_atan(ctx, rv_expr);
+            break;
+        }
+        case ATAN2:{
+            rv = table->getAlias(rpv.lvar);
+            dreal_expr rvl_expr = getExpr(rv, treat, rval, table);
+            exprr = dreal_mk_atan2(ctx, rvl_expr, rv_expr);
+            break;
+        }
+        case SIN:{
+            exprr = dreal_mk_sin(ctx, rv_expr);
+            break;
+        }
+        case ASIN:{
+            exprr = dreal_mk_asin(ctx, rv_expr);
+            break;
+        }
+        case COS:{
+            exprr = dreal_mk_cos(ctx, rv_expr);
+            break;
+        }
+        case ACOS:{
+            exprr = dreal_mk_acos(ctx, rv_expr);
+            break;
+        }
+        case SQRT:{
+            exprr = dreal_mk_pow(ctx, rv_expr, dreal_mk_num(ctx, 0.5));
+            break;
+        }
+        case POW:{
+            rv = table->getAlias(rpv.lvar);
+            dreal_expr rvl_expr = getExpr(rv, treat, rval, table);
+            exprr = dreal_mk_pow(ctx, rvl_expr, rv_expr);
+            break;
+        }
+        case LOG:{
+            exprr = dreal_mk_log(ctx, rv_expr);
+            break;
+        }
+        case LOG10:{
+            exprr = dreal_mk_div(ctx, dreal_mk_log(ctx, rv_expr),dreal_mk_log(ctx, dreal_mk_num(ctx, 10)));
+            break;
+        }
+        case EXP:{
+            exprr = dreal_mk_exp(ctx, rv_expr);
+            break;
+        }
+        default:
+            assert(false && "Mk_function_expr error: Op_m is not a function operator!!");
+            break;
+    }
+
+    return dreal_mk_eq(ctx, exprl, exprr);
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 dreal_expr UnlinearVerify::tran_constraint(Constraint *con, UnlinearVarTable *table, int time)
 {
     dbg->getConsInfo(con);
     Operator op = con->op;
-    
+
+    dreal_expr ast=NULL; 
+
+    switch(op){
+        case EQ:case NE:
+        case SLT:case SLE:case SGT:case SGE:
+        case ULT:case ULE:case UGT:case UGE:
+        case FEQ:case FNE:
+        case FLT:case FLE:case FGT:case FGE:{
+            ast = mk_compare_ast(con, table);
+            break;
+        }
+        case ASSIGN:{
+            ast = mk_assignment_ast(con, table, time);
+            break;
+        }
+        default:
+            assert(false && "Tran_constraint error: Unvalid operator!!");
+            break;
+    }
+
+    return ast;
+
+/* 
     dreal_expr exprl; 
     dreal_expr exprr;
     dreal_expr ast; 
-    
+
     CFG *cfg = table->getCFG();
 
     ParaVariable lpv,rpv;
@@ -1117,6 +1948,7 @@ dreal_expr UnlinearVerify::tran_constraint(Constraint *con, UnlinearVarTable *ta
     }
 
     return ast;
+    */
 
 }
 
@@ -1134,8 +1966,9 @@ void UnlinearVerify::get_constraint(vector<Constraint> consList, UnlinearVarTabl
     for(unsigned m=0;m<consList.size();m++)
     {
         Constraint* con = &consList[m];
+        //if(outMode==1)
+            //errs()<<*con<<"\n";
         dreal_expr ast = tran_constraint(con, table, time );
-        // errs()<<*con<<"\n";
         if(ast!=NULL){
 /*
             if(isOR){
@@ -1149,8 +1982,14 @@ void UnlinearVerify::get_constraint(vector<Constraint> consList, UnlinearVarTabl
 */
             dreal_assert(ctx, ast);
             if(outMode==1){
+		cerr<<"(assert ";
                 dreal_print_expr(ast);
-                cerr<< endl;
+                cerr<<")"<<endl;
+            }
+        } 
+        else{
+            if(outMode==1){
+                //cerr<<"......"<<"\n";
             }
         }
     }
@@ -1195,6 +2034,8 @@ void UnlinearVerify::encode_path(CFG* ha, vector<int> patharray)
 
         }
     }
+    delete table;
+    table = NULL;
 //    cerr<<"Path encode complete~~~~~~~~~~~~~~~~~~ "<<endl;
 
 }

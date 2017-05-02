@@ -7,7 +7,7 @@ using namespace std;
 
 string split(string filename);
 void printUsage();
-void compile(string filename);
+void compile(string name, int o);
 void opt(string name, int b, double p, int m, char* f, char* e, int o);
 void addExpr(string name, string expr);
 string inttostring(const int i);
@@ -56,19 +56,15 @@ int main(int argc, char* argv[]){
             }
             else if(argv[i][1] == 'a'){
                 mode_a = true;
-                i ++;
             }
             else if(argv[i][1] == 'd'){
                 mode_d = true;
-                i ++;
             }
             else if(argv[i][1] == 'o'){
                 output=1;
-                i ++;
             }
             else if(argv[i][1] == 't'){
-                mode=0;
-                i ++;
+                output=2;
             }
             else{
                 printUsage();
@@ -101,7 +97,7 @@ int main(int argc, char* argv[]){
     }
 
     string name = split(filename);
-    compile(name);
+    compile(name, output);
     opt(name, bound, precision, mode, func, expression, output);
     return 0;
 }
@@ -111,13 +107,16 @@ void printUsage(){
     cout << "[-options]:" << endl;
     cout<<"\t-l <line> (-s <expr>)\tspecify lineNo (and expression) to check on"<<endl;
     cout<<"\t-o\t\tBRICK display CFG and constraints while checking"<<endl;
+    cout<<"\t-t\t\tBRICK display test informations while checking"<<endl;
     cout<<"\t-a\t\tset mode in which BRICK check assert only"<<endl;
     cout<<"\t-d\t\tset mode in which BRICK check domain error only"<<endl;
 }
 
-void compile(string name){
+void compile(string name, int o){
     string cflags = "-emit-llvm -g ";
     string command = "clang -c " + cflags + name + ".c " + "-o "+ name + ".bc";
+    if(o)    
+       cout << command<<endl;
     int response = system(command.c_str());
     return;
 }
@@ -150,11 +149,11 @@ void opt(string name, int b, double p, int m, char* f, char* e, int o){
     string expr = "";
     if(e != NULL)
         expr += "-expression=\"" + string(e)+"\"";
-    string command = "opt -load buildCFG.so -load libcapd.so -load libibex.so"
-    " -load libdreal.so -load libz3.so -load libminisat.so"
-    " -buildCFG "+bound+" "+precision+" "+mode+" "+func+" "+output+" "+expr+"<"+name+".bc>"+name+"buildCFG.bc";
+    string command = "opt -load buildCFG.so -load libz3.so -load libminisat.so"
+    " -load libcapd.so -load libibex.so -load libdreal.so"
+    " -buildCFG "+bound+" "+precision+" "+mode+" "+func+" "+output+" "+expr+"<"+name+".bc>"+" "+name+"buildCFG.bc";
 	
-    if(o==1)    
+    if(o)    
 	   cout << command<<endl;
     int response = system(command.c_str());
 }

@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include <sstream>
 #include <cstring>
-#include "dreal.h"
+#include "dreal/dreal_c.h"
 //#include "Solver.h"
 //#include "dreal_c.h"
 #include <fstream>
@@ -65,15 +65,26 @@ class UnlinearVerify: public Verify{
     DebugInfo *dbg;
 
     dreal_expr getExpr(Variable *v, bool &treat, double &val, UnlinearVarTable *table);
-    dreal_expr dreal_mk_AND(dreal_context ctx, dreal_expr y, dreal_expr z, string name, unsigned num);
-    dreal_expr dreal_mk_NAND(dreal_context ctx, dreal_expr y, dreal_expr z, string name, unsigned num);
-    dreal_expr dreal_mk_OR(dreal_context ctx, dreal_expr y, dreal_expr z, string name, unsigned num);
-    dreal_expr dreal_mk_XOR(dreal_context ctx, dreal_expr y, dreal_expr z, string name, unsigned num);
-    dreal_expr dreal_mk_SREM(dreal_context ctx, dreal_expr y, dreal_expr z, string name);
+    void dreal_mk_tobv_expr(dreal_context ctx, dreal_expr x, string name, unsigned num, vector<dreal_expr> &xbv);
+    dreal_expr dreal_mk_AND(dreal_context ctx, dreal_expr y, dreal_expr z, string yname, string zname, unsigned num);
+    dreal_expr dreal_mk_NAND(dreal_context ctx, dreal_expr y, dreal_expr z, string yname, string zname, unsigned num);
+    dreal_expr dreal_mk_OR(dreal_context ctx, dreal_expr y, dreal_expr z, string yname, string zname, unsigned num);
+    dreal_expr dreal_mk_XOR(dreal_context ctx, dreal_expr y, dreal_expr z, string yname, string zname, unsigned num);
+    dreal_expr dreal_mk_REM(dreal_context ctx, dreal_expr y, dreal_expr z, string name);
     dreal_expr dreal_mk_ASHR(dreal_context ctx, dreal_expr y, int rr, string name, unsigned num);
+    dreal_expr dreal_mk_LSHR(dreal_context ctx, dreal_expr y, int rr, string name, unsigned num);
     dreal_expr dreal_mk_SHL(dreal_context ctx, dreal_expr y, int rr, string name, unsigned num);
     dreal_expr dreal_mk_INT_cmp(dreal_context ctx, dreal_expr y, dreal_expr z, Op_m pvop, string name);
     int getCMP(int rl, int rr, Op_m pvop);
+
+    dreal_expr mk_compare_ast(Constraint *con, UnlinearVarTable *table);
+    dreal_expr mk_assignment_ast(Constraint *con, UnlinearVarTable *table, int time);
+    dreal_expr mk_ptr_operation_expr(Variable *lv, ParaVariable rpv, UnlinearVarTable *table);
+    dreal_expr mk_convert_expr(Variable *lv, ParaVariable rpv, UnlinearVarTable *table, int time);
+    dreal_expr mk_binaryop_expr(Variable *lv, ParaVariable rpv, UnlinearVarTable *table, int time);
+    dreal_expr mk_compare_expr(Variable *lv, ParaVariable rpv, UnlinearVarTable *table, int time);
+    dreal_expr mk_function_expr(Variable *lv, ParaVariable rpv, UnlinearVarTable *table, int time);
+
     dreal_expr tran_constraint(Constraint *con, UnlinearVarTable *table, int time);
     void get_constraint(vector<Constraint> consList, UnlinearVarTable *table, int time, bool isTransition);
     void encode_path(CFG* ha, vector<int> patharray);
@@ -87,7 +98,9 @@ class UnlinearVerify: public Verify{
     void clear(){
         index_cache.clear();
         core_index.clear();
-        delete table;
+        if(table)
+            delete table;
+        table = NULL;
 
         dreal_reset(ctx);
         //dreal_del_context(ctx);
@@ -123,7 +136,7 @@ public:
     }
     bool check(CFG* ha, vector<int> path);
     vector<IndexPair> get_core_index(){return core_index;}
-    ~UnlinearVerify(){delete table; dreal_del_context(ctx);index_cache.clear();core_index.clear();}
+    ~UnlinearVerify();
     void print_sol(CFG* cfg);
 
     double getTime(){return time;}

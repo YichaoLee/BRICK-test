@@ -133,8 +133,18 @@ bool CFG::isLinear(){
     return linear;
 } 
 
+void CFG::setModeLock(){
+    modeLock = true;
+}
+
 void CFG::setUnlinear(){
-    linear = false;
+    if(!modeLock)
+       linear = false;
+}
+
+void CFG::setLinear(){
+    if(!modeLock)
+       linear = true;
 }
 
 bool CFG::is_state(const int ID){
@@ -362,7 +372,7 @@ double Variable::getVal(){
 }
 
 raw_ostream& operator << (raw_ostream& os, Variable& object){
-    errs()<<"name:"<<object.name<<" id:"<<object.ID<<" type:"<<get_var_type(object.type)<<object.numbits;
+    errs()<<"name:"<<object.name<<" id:"<<object.ID<<" type:"<<get_var_type(object.type)<<" bits:"<<object.numbits;
     return os;
 }
 
@@ -440,15 +450,33 @@ raw_ostream& operator << (raw_ostream& os, State object){
 void CFG::print(){
     errs()<<"*******************CFG Information*********************\n";
     errs()<<"CFG:"<<name<<"\n";
-    errs()<<"VerifierMode:\t";
-    if(linear)
-        errs()<<"Linear\n";
-    else
-        errs()<<"Unlinear\n";
-    for(unsigned int i=0;i<variableList.size();i++){
-        errs()<<"variable:"<<variableList[i].name;
-        errs()<< ", " << variableList[i].ID;
-        errs()<<" "<<get_var_type(variableList[i].type)<<variableList[i].numbits<<"\n";
+    printLinearMode();
+    unsigned mainInputID=0;
+    unsigned mainSize = mainInput.size();
+    for(unsigned i=0;i<variableList.size();i++){ 
+	if(variableList[i].type==PTR)
+		continue;
+	errs()<<"(declare-fun ";
+	errs()<<variableList[i].name;
+	errs()<<" () ";
+	if(variableList[i].type==INT)
+		errs()<<"Int";
+	else
+		errs()<<"Real";
+	errs()<<")\n";
+    }
+    for(unsigned i=0;i<variableList.size();i++){ 
+        errs()<<variableList[i];
+        // errs()<<"variable:"<<variableList[i].name;
+        // errs()<< ", " << variableList[i].ID;
+        // errs()<<", "<<get_var_type(variableList[i].type)<<variableList[i].numbits;
+        if(mainInputID<mainSize){
+            if(mainInput[mainInputID]==i){
+                errs()<<", mainInput";
+                mainInputID++;
+            }
+        }
+        errs()<<"\n";
     }
     errs()<<"\n";
     for(unsigned int i=0;i<stateList.size();i++)
@@ -456,7 +484,14 @@ void CFG::print(){
     for(unsigned int i=0;i<transitionList.size();i++)
         errs()<<transitionList[i]<<"\n";
 }   
-       
+   
+void CFG::printLinearMode(){
+	errs()<<"VerifierMode:\t";
+    if(linear)
+        errs()<<"Linear\n";
+    else
+        errs()<<"Unlinear\n";
+}
 
 Operator getEnumOperator(string str)
 {

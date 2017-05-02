@@ -77,7 +77,7 @@ class LinearVerify: public Verify{
 public:
     LinearVerify();
     LinearVerify(DebugInfo *d, int mode);
-    ~LinearVerify(){clear();}
+    ~LinearVerify();
     bool check(CFG* ha, vector<int> path);
     vector<IndexPair> get_core_index(){return core_index;}
     double getTime(){return time;}

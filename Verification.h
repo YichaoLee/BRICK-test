@@ -7,13 +7,12 @@
 #include <cstdlib>
 #include <sstream>
 #include <cstring>
-#include "dreal.h"
 //#include "Solver.h"
 #include "minisat/core/Solver.h"
 //#include "dreal_c.h"
 #include <fstream>
 #include "LinearVerify.h"
-// #include "UnlinearVerify.h"
+#include "UnlinearVerify.h"
 
 class BoundedVerification{
 public:

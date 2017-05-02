@@ -33,14 +33,14 @@ enum Operator{
 };
 
 enum Op_m{
-    TRUNC,ZEXT,SEXT,FPTRUNC,FPEXT,FPTOUI,FPTOSI,UITOFP,SITOFP,BITCAST,
+    TRUNC,ZEXT,SEXT,FPTRUNC,FPEXT,FPTOUI,FPTOSI,UITOFP,SITOFP,
     FADD,ADD,SUB,FSUB,MUL,FMUL,UDIV,SDIV,FDIV,
     UREM,SREM,FREM,
     LSHR,ASHR,SHL,AND,NAND,OR,XOR,
     ABS,FABS,
-    ISNAN,ISINF,ISNORMAL,ISFINITE,SIGNBIT,CLASSIFY,
+    ISNAN,ISINF,ISNORMAL,ISFINITE,SIGNBIT,CLASSIFY,//SETROUND,
     SINH,COSH,TANH,TAN,ATAN,ATAN2,SIN,ASIN,COS,ACOS,SQRT,POW,LOG,LOG10,EXP,
-    ADDR,GETPTR,STORE,LOAD,ALLOCA,
+    ADDR,GETPTR,STORE,LOAD,ALLOCA,BITCAST,
     eq,ne,
     slt,sle,sgt,sge,
     ult,ule,ugt,uge,
@@ -84,9 +84,9 @@ class Variable{
         VarType type;
         string name;
         int ID;
-        unsigned numbits; 
+        unsigned numbits;
         Variable(){type=FP;ID=-1;numbits=0;}
-        Variable(string name1,int id,VarType ty,unsigned nb){name=name1;ID=id;type=ty;numbits=nb;}   
+        Variable(string name1,int id,VarType ty,unsigned nb){name=name1;ID=id;type=ty;numbits=nb;}
         Variable(const Variable &a){
             this->name=a.name;
             this->ID=a.ID;
@@ -272,6 +272,7 @@ class CFG{
         map<string,Transition*> transitionStrMap;
         map<int,string> nameMap;
         bool linear;
+        bool modeLock;
     public:
         map<string,State*> LabelMap;
         map<string,vector<string>> CallLabel;
@@ -292,7 +293,7 @@ class CFG{
         vector<State> stateList;
         vector<Transition> transitionList;//at the same time  ,equals to the transList
         vector<Variable> variableList;
-        vector<int> mainInput;
+        vector<unsigned> mainInput;
         //vector<Transition*> transitionList1;
         Constraint c_tmp1;
         Constraint c_tmp2;
@@ -304,11 +305,15 @@ class CFG{
             counter_q_state = 0;
             counter_transition = 0;
             linear=true;
+            modeLock=false;
         }
         void print();
+        void printLinearMode();
         bool initial();
         bool is_state(const int ID);
         bool isLinear();
+        void setModeLock();
+        void setLinear();
         void setUnlinear();
         bool hasVariable(string name);
         Variable* getVariable(string name);
@@ -358,7 +363,7 @@ public:
 
 class Verify{
 public:
-    virtual ~Verify()=0;
+    virtual ~Verify();
     virtual bool check(CFG* ha, vector<int> path)=0;
     virtual vector<IndexPair> get_core_index()=0;
     virtual void print_sol(CFG* cfg)=0;

@@ -1258,11 +1258,11 @@ static string getVariableName(raw_ostream &Out, const Value *V,
             // the value back and get the same value.
             //
 //                 bool ignored;
-                 bool isHalf = &CFP->getValueAPF().getSemantics()==&APFloat::IEEEhalf;
-                 bool isDouble = &CFP->getValueAPF().getSemantics()==&APFloat::IEEEdouble;
-                 bool isInf = CFP->getValueAPF().isInfinity();
-                 bool isNaN = CFP->getValueAPF().isNaN();
-                 bool isZero = CFP->isZero();
+                 // bool isHalf = &CFP->getValueAPF().getSemantics()==&APFloat::IEEEhalf;
+                 // bool isDouble = &CFP->getValueAPF().getSemantics()==&APFloat::IEEEdouble;
+                 // bool isInf = CFP->getValueAPF().isInfinity();
+                 // bool isNaN = CFP->getValueAPF().isNaN();
+                 // bool isZero = CFP->isZero();
 
                  
 	            APFloat apf = CFP->getValueAPF();
@@ -2089,7 +2089,7 @@ bool InstParser::InsertCFGLabel(CFG* cfg,const BasicBlock *BB, State* s, string 
         }
         string SLot = BB->getName();
         //stringstream ss;
-        lname = func+"_"+SLot; 
+        lname = func+"."+SLot; 
         cfg->LabelMap.insert( pair<string,State*> (lname,s));
         cfg->endBlock[lname] = lname;
         //    errs()<<"func\t"<<lname <<"\t"<< s->name<<"~~~~~~~~~~~~~~~\n";
@@ -2124,7 +2124,7 @@ bool InstParser::InsertCFGLabel(CFG* cfg,const BasicBlock *BB, State* s, string 
         lname = name; 
         cfg->LabelMap.insert( pair<string,State*> (lname,s));
         string SLot = BB->getName();
-        string lname_origin = func+"_"+SLot; 
+        string lname_origin = func+"."+SLot; 
         cfg->endBlock[lname_origin] = lname;
 
         for(unsigned int i=0;i<cfg->transitionList.size();i++){
@@ -2785,7 +2785,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
             p2 = cfg->callVar.front();
             cfg->callVar.pop_front();
             string varNum = it->getName();
-            string varName = func+"_"+varNum;
+            string varName = func+"."+varNum;
             if(cfg->hasVariable(varName)){
                 Variable *var = cfg->getVariable(varName);
                 p1.rvar = new Variable(var);
@@ -2817,7 +2817,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
         }
     }
 
-    unsigned Line;
+    unsigned Line=0;
     if (MDNode *N = I->getMetadata("dbg")) {  
         DILocation Loc(N);//DILocation is in DebugInfo.h  
         Line = Loc.getLineNumber();  
@@ -2826,22 +2826,20 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
             if(s->locList[i]==(int)Line)
                 is_pushed = true;
         }
-        if(!is_pushed)
-        {
-
-        s->locList.push_back(Line);
-        stringstream ss;
-        ss<<Line;
-        string s1=ss.str();
-        s->ContentRec.append("\tLineNum:");
-        s->ContentRec.append(s1.c_str());
+        if(!is_pushed){
+            s->locList.push_back(Line);
+            stringstream ss;
+            ss<<Line;
+            string s1=ss.str();
+            s->ContentRec.append("\tLineNum:");
+            s->ContentRec.append(s1.c_str());
         }
     }
 
     dbg->getInstInfo(I);
 
     if(op == "alloca"){
-        string varName = func+"_"+getDesVarName(I);
+        string varName = func+"."+getDesVarName(I);
 
         const AllocaInst *AI = dyn_cast<AllocaInst>(I);
         Type *Ty = AI->getAllocatedType();
@@ -2853,7 +2851,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
     if(op=="fcmp"){
         unsigned n1 = I->getNumOperands();
 
-        string c=func+"_"+getDesVarName(I); 
+        string c=func+"."+getDesVarName(I); 
         unsigned numBits = getNumBits(I);
         Constraint cTemp;
         ParaVariable p1,p2;
@@ -2876,7 +2874,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
             Value* v1 = I->getOperand(j);
             numBits = getNumBits(v1);
             string varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-            string varName = func+"_"+varNum;
+            string varName = func+"."+varNum;
             if(j==0){
                 if(isConstantVal(v1)){                                      
                     pTemp1.rvar = new Variable(varNum,-1,FPNUM,numBits);
@@ -2938,7 +2936,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
     else if(op=="icmp"){
         unsigned n1 = I->getNumOperands();
 
-        string c=func+"_"+getDesVarName(I); 
+        string c=func+"."+getDesVarName(I); 
         unsigned numBits = getNumBits(I);
         Constraint cTemp;
         ParaVariable pt1,pt2;
@@ -2961,7 +2959,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
             Value* v1 = I->getOperand(j);
             numBits = getNumBits(v1);
             string varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-            string varName = func+"_"+varNum;
+            string varName = func+"."+varNum;
             if(j==0){
                 if(isConstantVal(v1)){                                      
                     pTemp1.rvar = new Variable(varNum,-1,INTNUM,numBits);
@@ -2987,7 +2985,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
                                 
                         Value* v2 = EI->getOperand(0);
                         string varNum1 = getVariableName(Out, v2, &TypePrinter, &Machine, TheModule);
-                        string varName1 = func+"_"+varNum1;
+                        string varName1 = func+"."+varNum1;
                         if(isa<GlobalVariable>(v2) )
                             varName1 = setGlobal(varNum1, v2, cfg, s);
                                 
@@ -3000,7 +2998,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
                         else
                             errs()<<"3.Icmp.Getelementptr: error 10086\t"<<varName1<<"\n";        
 
-                        string tempName = varName+"_t"+intToString(j);
+                        string tempName = varName+".t"+intToString(j);
                         Variable tVar(tempName, cfg->counter_variable++, PTR, 0);
                         cfg->variableList.push_back(tVar);
                         p1.rvar = new Variable(tVar);
@@ -3063,7 +3061,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
                                 
                         Value* v2 = EI->getOperand(0);
                         string varNum1 = getVariableName(Out, v2, &TypePrinter, &Machine, TheModule);
-                        string varName1 = func+"_"+varNum1;
+                        string varName1 = func+"."+varNum1;
                         if(isa<GlobalVariable>(v2) )
                             varName = setGlobal(varNum1, v2, cfg, s);
                                 
@@ -3076,7 +3074,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
                         else
                             errs()<<"9.Icmp.Getelementptr: error 10086\t"<<varName1<<"\n";      
 
-                        string tempName = varName+"_t"+intToString(j);
+                        string tempName = varName+".t"+intToString(j);
                         Variable tVar(tempName, cfg->counter_variable++, PTR,0);
                         cfg->variableList.push_back(tVar);
                         p1.rvar = new Variable(tVar);
@@ -3127,7 +3125,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
     else if(op=="sitofp"||op=="fpext"||op=="fptosi"||op=="sext"||op=="uitofp"||op=="zext"||op=="trunc"||op=="fptrunc"||op=="fptoui"||op=="bitcast"){
         Constraint cTemp;
         unsigned n1 = I->getNumOperands();
-        string c=func+"_"+getDesVarName(I); 
+        string c=func+"."+getDesVarName(I); 
         ParaVariable pTemp1,pTemp2;
 
         unsigned numBits = getNumBits(I);
@@ -3158,7 +3156,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
         for(unsigned j = 0;j< n1; j ++){
             Value* v1 = I->getOperand(j);
             string varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-            string varName = func+"_"+varNum;
+            string varName = func+"."+varNum;
             if(j==0){
                 if(cfg->hasVariable(varName)){
                     Variable *var = cfg->getVariable(varName);
@@ -3183,7 +3181,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
 //        const LoadInst *CI = dyn_cast<LoadInst>(I);
         Constraint cTemp;
         unsigned n1 = I->getNumOperands();
-        string c=func+"_"+getDesVarName(I); 
+        string c=func+"."+getDesVarName(I); 
         ParaVariable pTemp1,pTemp2;
         cTemp.op=ASSIGN;
         pTemp2.op = LOAD;
@@ -3228,7 +3226,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
                         
                         Value* v2 = EI->getOperand(0);
                         string varNum = getVariableName(Out, v2, &TypePrinter, &Machine, TheModule);
-                        string varName = func+"_"+varNum;
+                        string varName = func+"."+varNum;
                         if(isa<GlobalVariable>(v2))
                             varName = setGlobal(varNum, v2, cfg, s);
                         
@@ -3241,7 +3239,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
                         else
                             errs()<<"6.Load:Getelementptr: error 10086\t"<<varName<<"\n";      
 
-                        string tempName = varName+"_t"+intToString(j);
+                        string tempName = varName+".t"+intToString(j);
                         Variable tVar(tempName, cfg->counter_variable++, PTR, 0);
                         cfg->variableList.push_back(tVar);
                         p1.rvar = new Variable(tVar);
@@ -3275,7 +3273,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
                 }
                 else{
                     string varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-                    string varName = func+"_"+varNum;
+                    string varName = func+"."+varNum;
                     if(j==0){
                         if(cfg->hasVariable(varName)){
                             Variable *var = cfg->getVariable(varName);
@@ -3308,12 +3306,12 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
         Value* v1 = I->getOperand(0);
         
         string varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-        string varName = func+"_"+varNum;
+        string varName = func+"."+varNum;
 
 
         Value* v2 = I->getOperand(1);
         string varNum2 = getVariableName(Out, v2, &TypePrinter, &Machine, TheModule);
-        string varName2 = func+"_"+varNum2;
+        string varName2 = func+"."+varNum2;
 
         Type *Ty = v1->getType();
 
@@ -3331,7 +3329,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
                         
                 Value* v2 = EI->getOperand(0);
                 string varNum1 = getVariableName(Out, v2, &TypePrinter, &Machine, TheModule);
-                string varName1 = func+"_"+varNum1;
+                string varName1 = func+"."+varNum1;
                 if(isa<GlobalVariable>(v2) )
                     varName1 = setGlobal(varNum1, v2, cfg, s);
                 
@@ -3344,7 +3342,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
                 else
                     errs()<<"3.Store Getelementptr: error 10086\t"<<varName1<<"\n";      
 
-                string tempName = varName+"_t";
+                string tempName = varName+".t";
                 Variable tVar(tempName, cfg->counter_variable++, PTR, 0);
                 cfg->variableList.push_back(tVar);
                 p1.rvar = new Variable(tVar);                        
@@ -3452,7 +3450,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
 
         Constraint cTemp;
         unsigned n1 = I->getNumOperands();
-        string c=func+"_"+getDesVarName(I); 
+        string c=func+"."+getDesVarName(I); 
         ParaVariable pTemp1,pTemp2;//,pTemp3;
 
         unsigned numBits = getNumBits(I);
@@ -3479,7 +3477,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
             Value* v1 = I->getOperand(j);
             numBits = getNumBits(v1);
             string varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-            string varName = func+"_"+varNum;
+            string varName = func+"."+varNum;
             if(j==0){
                 if(isa<ConstantInt>(v1)){
 	                pTemp2.lvar = new Variable(varNum,-1,INTNUM,numBits);
@@ -3520,13 +3518,14 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
         	a/b b is variable(b need to be an unknown variable, wait to be fix)
         	*/
 
-        /*
-        if(pTemp2.op==MUL&&!isNumVal(pTemp2.lvar)&&!isNumVal(pTemp2.rvar))
-            cfg->setUnlinear();
         
-        else if(pTemp2.op==DIV&&!isNumVal(pTemp2.rvar))
+        // if(pTemp2.op==MUL&&!isNumVal(pTemp2.lvar)&&!isNumVal(pTemp2.rvar))
+        //     cfg->setUnlinear();
+        
+        // else 
+        if((pTemp2.op==SDIV || pTemp2.op==UDIV || pTemp2.op==FDIV)&&!isNumVal(pTemp2.rvar))
             cfg->setUnlinear();
-		*/
+		
 
         pTemp2.isExp = true;
         cTemp.rpvList = pTemp2;
@@ -3536,7 +3535,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
     
     else if(op == "select"){
         Constraint cTemp;
-        string c=func+"_"+getDesVarName(I); 
+        string c=func+"."+getDesVarName(I); 
         ParaVariable pTemp1,pTemp2;//,pTemp3;
 
         unsigned numBits = getNumBits(I);
@@ -3602,7 +3601,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
         	
         	numBits = getNumBits(v1);
             string varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-            string varName = func+"_"+varNum;
+            string varName = func+"."+varNum;
             //errs()<<varName;
             //follow the cmp Instruction
 
@@ -3628,7 +3627,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
                 string name = "s"+str;
                 s1 = new State(false, id, name, func);
 
-                toLabel1=c+"_true";
+                toLabel1=c+".true";
                 tr1->toLabel=toLabel1;
                 InsertCFGLabel(cfg,b,s1, func, toLabel1, true);
 
@@ -3667,7 +3666,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
                 s2 = new State(false, id, name, func);
 //                errs()<<*s2<<"\n";
 
-                toLabel2=c+"_false";
+                toLabel2=c+".false";
                 tr2->toLabel=toLabel2;
                 InsertCFGLabel(cfg,b,s2, func, toLabel2, true);
                 if(s2!=NULL)
@@ -3710,7 +3709,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
         tr4->toState=NULL;
 
         s3->level = (tr3->level>tr4->level)?tr4->level:tr3->level;
-        string toLabel3 = c+"_ret";
+        string toLabel3 = c+".ret";
 
         tr3->toLabel=toLabel3;
         tr4->toLabel=toLabel3;
@@ -3731,7 +3730,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
 
     else if(op == "phi"){
         Constraint cTemp;
-        string c=func+"_"+getDesVarName(I); 
+        string c=func+"."+getDesVarName(I); 
         ParaVariable pTemp1,pTemp2;//,pTemp3;
 
         unsigned numBits = getNumBits(I);
@@ -3765,7 +3764,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
             Value *v = PN->getIncomingValue(i);
             numBits = getNumBits(v);
             string varNum = getVariableName(Out, v, &TypePrinter, &Machine, TheModule);
-            string varName = func+"_"+varNum;
+            string varName = func+"."+varNum;
             if(isa<ConstantInt>(v)){
                 pTemp2.rvar = new Variable(varNum,-1,INTNUM,numBits);
             }
@@ -3789,7 +3788,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
 
             BasicBlock *bb = PN->getIncomingBlock(i);
             string bbName = bb->getName();
-            string fromLabel = func+"_"+bbName;
+            string fromLabel = func+"."+bbName;
             string label = cfg->endBlock[fromLabel];
             State *froms = NULL;
             froms = cfg->LabelMap[label];
@@ -3849,7 +3848,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
             Value* v = I->getOperand(0);
             numBits = getNumBits(v);
 	        string conNum = getVariableName(Out, v, &TypePrinter, &Machine, TheModule);
-	        string conName = func+"_"+conNum;
+	        string conName = func+"."+conNum;
 
 	        if(isa<ConstantInt>(v)){
                 pTemp1.rvar = new Variable(conNum,-1,INTNUM,numBits);
@@ -3898,7 +3897,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
 
 	
                 if(j==1){//its the left
-                    toLabel1=func+"_"+varName;
+                    toLabel1=func+"."+varName;
                     tr1->toLabel=toLabel1;
                     State* s1 = cfg->getLabelState(toLabel1);
                     if(s1!=NULL)
@@ -3908,7 +3907,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
                     }
                 }
                 else if (j==2){
-                    toLabel2=func+"_"+varName;
+                    toLabel2=func+"."+varName;
                     tr2->toLabel=toLabel2;
                     State* s1 = cfg->getLabelState(toLabel2);
                     if(s1!=NULL)
@@ -3929,7 +3928,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
                 }
             }
             else if(n1==1){//signle br
-                toLabel1=func+"_"+varName;
+                toLabel1=func+"."+varName;
                 tr1->toLabel=toLabel1;
                 State* s1 = cfg->getLabelState(toLabel1);
                 if(s1!=NULL)
@@ -3951,7 +3950,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
         Constraint cTemp;
         unsigned n1 = I->getNumOperands();
 
-        string c=func+"_"+getDesVarName(I); 
+        string c=func+"."+getDesVarName(I); 
         ParaVariable pTemp1,pTemp2;
         unsigned numBits = 0;
 
@@ -3991,11 +3990,17 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
 
         if(funcName == "__BRICK_SPEC")
             return;
+
+        if(funcName.find("nondet") != string::npos){
+            int NondetID = pTemp1.rvar->ID;
+            cfg->mainInput.push_back(NondetID);
+            return;
+        }
         /*
         else if(funcName == "__isnan"){
         	Value* v1 = I->getOperand(0);
             string varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-            string varName = func+"_"+varNum;
+            string varName = func+"."+varNum;
 
             if(cfg->hasVariable(varName)){
             	Variable *var = cfg->getVariable(varName);
@@ -4013,7 +4018,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
         else if(funcName == "__isinf"){
         	Value* v1 = I->getOperand(0);
             string varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-            string varName = func+"_"+varNum;
+            string varName = func+"."+varNum;
 
             if(cfg->hasVariable(varName)){
             	Variable *var = cfg->getVariable(varName);
@@ -4050,9 +4055,9 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
             if(it!=cfg->funcTime.end())
                 time = it->second+1;
             if(time>0)
-                funcName = funcName+intToString(time);
+                funcName = funcName+".t"+intToString(time);
 
-            string toLabel = funcName+"_entry";
+            string toLabel = funcName+".entry";
 
             t =cfg->counter_transition++;
             string tt = intToString(t);
@@ -4076,7 +4081,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
                 for (Function::const_arg_iterator it = f->arg_begin(), E = f->arg_end();it != E; ++it){
                     Value* v1 = I->getOperand(i);
                     string varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-                    string varName = func+"_"+varNum;
+                    string varName = func+"."+varNum;
 
                     ParaVariable p2;
                     bool isPTRExpr = false;
@@ -4093,7 +4098,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
                                     
                             Value* v2 = EI->getOperand(0);
                             string varNum = getVariableName(Out, v2, &TypePrinter, &Machine, TheModule);
-                            string varName = func+"_"+varNum;
+                            string varName = func+"."+varNum;
                             if(isa<GlobalVariable>(v2) )
                                 varName = setGlobal(varNum, v2, cfg, s);
                                     
@@ -4106,7 +4111,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
                             else
                                 errs()<<"3.Call.Getelementptr: error 10086\t"<<varName<<"\n";
                                     
-                            string tempName = c+"_t"+intToString(i);
+                            string tempName = c+".t"+intToString(i);
                             Variable tVar(tempName, cfg->counter_variable++, PTR, 0);
                             cfg->variableList.push_back(tVar);
                             pt1.rvar = new Variable(tVar);
@@ -4138,7 +4143,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
                     if(!isPTRExpr){
                         Type *Ty = v1->getType();
                         varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-                        varName = func+"_"+varNum;
+                        varName = func+"."+varNum;
                         p2.isExp = false;
                         if(!Ty->isPointerTy()){
                             numBits = getNumBits(v1);
@@ -4215,7 +4220,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
         else if(funcName == "__VERIFIER_assume"){
             Value* v1 = I->getOperand(0);
             string varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-            string varName = func+"_"+varNum;
+            string varName = func+"."+varNum;
             numBits = getNumBits(v1);
 
             pTemp1.rvar = new Variable("0",-1,INTNUM,numBits);
@@ -4244,6 +4249,8 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
         }
 	//	math function like sin,pow is unlinear	
         switch(pTemp2.op){
+            case ISNAN:case ISINF:case ISNORMAL:case ISFINITE:case SIGNBIT:case CLASSIFY:
+                cfg->setLinear();cfg->setModeLock();break;
         	case SINH:case COSH:case TANH:case TAN:case ATAN:case ATAN2:case SIN:case ASIN:case COS:case ACOS:case SQRT:case POW:case LOG:case LOG10:case EXP:
         		cfg->setUnlinear();break;
         	default:
@@ -4254,7 +4261,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
             Value* v1 = I->getOperand(0);
             numBits = getNumBits(v1);
             string varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-            string varName = func+"_"+varNum;
+            string varName = func+"."+varNum;
             if(isa<ConstantInt>(v1)){
 				pTemp2.rvar = new Variable(varNum,-1,INTNUM,numBits);
 			}
@@ -4274,7 +4281,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
             Value* v1 = I->getOperand(1);
             numBits = getNumBits(v1);
             string varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-            string varName = func+"_"+varNum;
+            string varName = func+"."+varNum;
             if(isa<ConstantInt>(v1)){
 				pTemp2.rvar = new Variable(varNum,-1,INTNUM,numBits);
 			}
@@ -4293,7 +4300,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
             v1 = I->getOperand(0);
             numBits = getNumBits(v1);
             varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-            varName = func+"_"+varNum;
+            varName = func+"."+varNum;
             if(isa<ConstantInt>(v1)){
 				pTemp2.lvar = new Variable(varNum,-1,INTNUM,numBits);
 			}
@@ -4334,7 +4341,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
         tr->fromState=s;
         tr->fromName=s->name;
         tr->level=s->level+1;
-        tr->toLabel=func+"_ret";
+        tr->toLabel=func+".ret";
         State* s1 = cfg->getLabelState(tr->toLabel);
         if(s1!=NULL)
         {
@@ -4352,7 +4359,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
         if(ret!="1"&&v1!=NULL){
         
             string varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);;
-            string varName = func+"_"+varNum;
+            string varName = func+"."+varNum;
             Constraint cTemp1;
             unsigned numBits = 0;
             ParaVariable p1,p2;
@@ -4401,7 +4408,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
     //	......
     //	tn-1+an->pointer tn
     //	ptr=tn
-        string c=func+"_"+getDesVarName(I); 
+        string c=func+"."+getDesVarName(I); 
         unsigned n1 = I->getNumOperands();
         Value* v1 = I->getOperand(0);
         string varName;
@@ -4424,7 +4431,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
             varName = setGlobal(varNum, v1, cfg, s);
         }
         else{
-            varName = func+"_"+varNum;
+            varName = func+"."+varNum;
             if(!cfg->hasVariable(varName)) 
                 errs()<<"2.Getelementptr: error 10086\t"<<varName<<"\n";
         }
@@ -4441,7 +4448,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
             v1 = I->getOperand(i+1);
             unsigned numBits = 0;
             varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-            varName = func+"_"+varNum;
+            varName = func+"."+varNum;
             if(isa<ConstantInt>(v1)){
             	numBits = getNumBits(v1);
 				pTemp2.varList.push_back(new Variable(varNum,-1,INTNUM,numBits));
@@ -4493,7 +4500,7 @@ string InstParser::setGlobalConstraint(string name, Constant *Initial, CFG *cfg,
             Variable *addrvar = cfg->getVariable(name);
             pvar = *addrvar;
         }            
-        string dataName = name+"_0";
+        string dataName = name+".0";
         Constraint cTemp1;
         ParaVariable p1,p2;
         p1.rvar = new Variable(pvar);
@@ -4542,8 +4549,9 @@ string InstParser::setGlobalConstraint(string name, Constant *Initial, CFG *cfg,
                 }
                 else if(isa<ConstantFP>(Initial)){
                     const ConstantFP *con = dyn_cast<ConstantFP>(Initial); 
-                    double value = con->getValueAPF().convertToDouble();
-                    string num = double2string(value);
+                    APFloat apf = con->getValueAPF();
+                    APInt convt = apf.bitcastToAPInt();
+                    string num = convt.toString(10,true);
                     pTemp2.rvar = new Variable(num,-1,FPNUM,numBits);
                 }
                 else if(isa<ConstantExpr>(Initial)){
@@ -4573,7 +4581,7 @@ string InstParser::setGlobalConstraint(string name, Constant *Initial, CFG *cfg,
                         errs()<<"3.Set global error 10086\t"<<varName<<"\n";
                     
                     
-                    string tempName = dataName+"_t";
+                    string tempName = dataName+".t";
                     Variable tVar(tempName, cfg->counter_variable++, PTR, 0);
                     cfg->variableList.push_back(tVar);
                     pt1.rvar = new Variable(tVar);
@@ -4634,7 +4642,7 @@ string InstParser::setGlobalConstraint(string name, Constant *Initial, CFG *cfg,
                     unsigned n = CA->getNumOperands();
 //                    errs()<<"2.1:const ConstantArray *CA = dyn_cast<ConstantArray>(Initial)\t"<<n<<"\n";
                     for(unsigned i=0;i<n;i++){
-                        string name = varNum+"_"+intToString(i);
+                        string name = varNum+"."+intToString(i);
                         Value *cv = CA->getOperand(i);
                         if(isa<UndefValue>(cv)) continue;
                         Variable var(name, cfg->counter_variable++, PTR, 0);
@@ -4643,7 +4651,7 @@ string InstParser::setGlobalConstraint(string name, Constant *Initial, CFG *cfg,
                             dataVar = var;
                     }
                     for(unsigned i=0;i<n;i++){
-                        string name = varNum+"_"+intToString(i);
+                        string name = varNum+"."+intToString(i);
                         Constant *cv = dyn_cast<Constant>(CA->getOperand(i));
                         if(isa<UndefValue>(cv)) continue;
                         setGlobalConstraint(name, cv, cfg, s);
@@ -4653,7 +4661,7 @@ string InstParser::setGlobalConstraint(string name, Constant *Initial, CFG *cfg,
                     unsigned n = CS->getNumOperands();
 //                    errs()<<"2.1:const ConstantStruct *CS = dyn_cast<ConstantStruct>(Initial)\t"<<n<<"\n";    
                     for(unsigned i=0;i<n;i++){
-                        string name = varNum+"_"+intToString(i);
+                        string name = varNum+"."+intToString(i);
                         Value *cv = CS->getOperand(i);
                         if(isa<UndefValue>(cv)) continue;
                         Variable var(name, cfg->counter_variable++, PTR, 0);
@@ -4662,7 +4670,7 @@ string InstParser::setGlobalConstraint(string name, Constant *Initial, CFG *cfg,
                             dataVar = var;
                     }
                     for(unsigned i=0;i<n;i++){
-                        string name = varNum+"_"+intToString(i);
+                        string name = varNum+"."+intToString(i);
                         Constant *cv = dyn_cast<Constant>(CS->getOperand(i));
                         if(isa<UndefValue>(cv)) continue;
                         setGlobalConstraint(name, cv, cfg, s);
@@ -4672,7 +4680,7 @@ string InstParser::setGlobalConstraint(string name, Constant *Initial, CFG *cfg,
                     unsigned n = CA->getNumElements();
 //                    errs()<<"2.1:const ConstantDataArray *CA = dyn_cast<ConstantDataArray>(Initial)\t"<<n<<"\n";
                     for(unsigned i=0;i<n;i++){
-                        string name = varNum+"_"+intToString(i);
+                        string name = varNum+"."+intToString(i);
                         Value *cv = CA->getElementAsConstant(i);
                         if(isa<UndefValue>(cv)) continue;
                         Variable var(name, cfg->counter_variable++, PTR, 0);
@@ -4681,7 +4689,7 @@ string InstParser::setGlobalConstraint(string name, Constant *Initial, CFG *cfg,
                             dataVar = var;
                     }
                     for(unsigned i=0;i<n;i++){
-                        string name = varNum+"_"+intToString(i);
+                        string name = varNum+"."+intToString(i);
                         Constant *cv = dyn_cast<Constant>(CA->getElementAsConstant(i));
                         if(isa<UndefValue>(cv)) continue;
                         setGlobalConstraint(name, cv, cfg, s);
@@ -4691,7 +4699,7 @@ string InstParser::setGlobalConstraint(string name, Constant *Initial, CFG *cfg,
                     unsigned n = CAZ->getNumOperands();
 //                    errs()<<"2.1:const ConstantAggregateZero *CAZ = dyn_cast<ConstantAggregateZero>(Initial)\t"<<n<<"\n";
                     for(unsigned i=0;i<n;i++){
-                        string name = varNum+"_"+intToString(i);
+                        string name = varNum+"."+intToString(i);
                         Value *cv = CAZ->getElementValue(i);
                         if(isa<UndefValue>(cv)) continue;
                         Variable var(name, cfg->counter_variable++, PTR, 0);
@@ -4700,7 +4708,7 @@ string InstParser::setGlobalConstraint(string name, Constant *Initial, CFG *cfg,
                             dataVar = var;
                     }
                     for(unsigned i=0;i<n;i++){
-                        string name = varNum+"_"+intToString(i);
+                        string name = varNum+"."+intToString(i);
                         Constant *cv = dyn_cast<Constant>(CAZ->getElementValue(i));
                         if(isa<UndefValue>(cv)) continue;
                         setGlobalConstraint(name, cv, cfg, s);
@@ -4710,7 +4718,7 @@ string InstParser::setGlobalConstraint(string name, Constant *Initial, CFG *cfg,
                     unsigned n = Initial->getNumOperands();
 //                    errs()<<"2.1:Else:"<<n<<"\n";
                     for(unsigned i=0;i<n;i++){
-                        string name = varNum+"_"+intToString(i);
+                        string name = varNum+"."+intToString(i);
                         Value *cv = Initial->getOperand(i);
                         if(isa<UndefValue>(cv)) continue;
                         Variable var(name, cfg->counter_variable++, PTR, 0);
@@ -4719,7 +4727,7 @@ string InstParser::setGlobalConstraint(string name, Constant *Initial, CFG *cfg,
                             dataVar = var;
                     }
                     for(unsigned i=0;i<n;i++){
-                        string name = varNum+"_"+intToString(i);
+                        string name = varNum+"."+intToString(i);
                         Constant *cv = dyn_cast<Constant>(Initial->getOperand(i));
                         if(isa<UndefValue>(cv)) continue;
                         setGlobalConstraint(name, cv, cfg, s);
@@ -4791,7 +4799,7 @@ void InstParser::setVariable(CFG* cfg, State * s, Type *Ty, string name, bool in
         else
             errs()<<"5.type error\n";
             
-        string dataName = name+"_0";
+        string dataName = name+".0";
         int ID = cfg->counter_variable++;
         Variable dataVar(dataName, ID, type, numBits);
         cfg->variableList.push_back(dataVar);
@@ -4800,12 +4808,8 @@ void InstParser::setVariable(CFG* cfg, State * s, Type *Ty, string name, bool in
         cTemp1.rpvList = p2;
         if(initial){
             cfg->initialCons.push_back(cTemp1);
-            if(type!=PTR)
-            	cfg->mainInput.push_back(ID);
         }
         else{
-            if(s->funcName=="main"&&type!=PTR)
-                cfg->mainInput.push_back(ID);
             s->consList.push_back(cTemp1);
         }
         p2.rvar = new Variable(dataVar);
@@ -4817,14 +4821,14 @@ void InstParser::setVariable(CFG* cfg, State * s, Type *Ty, string name, bool in
             ArrayType *ATy = dyn_cast<ArrayType>(Ty);
             unsigned n = ATy->getArrayNumElements();
             for(unsigned i=0;i<n;i++){
-                string varName = name+"_"+intToString(i);
+                string varName = name+"."+intToString(i);
                 Variable var(varName, cfg->counter_variable++, PTR, 0);
                 cfg->variableList.push_back(var);
                 if(i==0)
                     dataVar = var;
             }
             for(unsigned i=0;i<n;i++){
-                string varName = name+"_"+intToString(i);
+                string varName = name+"."+intToString(i);
                 Type *EleTy = ATy->getArrayElementType();
                     
                 setVariable(cfg, s, EleTy, varName, initial);
@@ -4834,14 +4838,14 @@ void InstParser::setVariable(CFG* cfg, State * s, Type *Ty, string name, bool in
             StructType *STy = dyn_cast<StructType>(Ty);
             unsigned n = STy->getStructNumElements();
             for(unsigned i=0;i<n;i++){
-                string varName = name+"_"+intToString(i);
+                string varName = name+"."+intToString(i);
                 Variable var(varName, cfg->counter_variable++, PTR, 0);
                 cfg->variableList.push_back(var);
                 if(i==0)
                     dataVar = var;
             }
             for(unsigned i=0;i<n;i++){
-                string varName = name+"_"+intToString(i);
+                string varName = name+"."+intToString(i);
                 Type *EleTy = STy->getStructElementType(i);
                     
                 setVariable(cfg, s, EleTy, varName, initial);
@@ -4909,7 +4913,7 @@ void InstParser::preprocess(CFG* cfg, State* &s, const Instruction* I, string fu
             Value* v1 = I->getOperand(0);
             unsigned numBits = getNumBits(v1);
             string varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-            string varName = func+"_"+varNum;
+            string varName = func+"."+varNum;
 
             if(cfg->hasVariable(varName)){
                 Constraint cTemp;
@@ -5008,7 +5012,7 @@ void InstParser::preprocess(CFG* cfg, State* &s, const Instruction* I, string fu
             Value* v1 = I->getOperand(0);
             unsigned numBits = getNumBits(v1);
             string varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-            string varName = func+"_"+varNum;
+            string varName = func+"."+varNum;
 
             if(cfg->hasVariable(varName)){
                 Constraint cTemp;
@@ -5074,7 +5078,7 @@ void InstParser::preprocess(CFG* cfg, State* &s, const Instruction* I, string fu
             Value* v1 = I->getOperand(0);
             unsigned numBits = getNumBits(v1);
             string varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-            string varName = func+"_"+varNum;
+            string varName = func+"."+varNum;
 
             if(cfg->hasVariable(varName)){
                 Constraint cTemp;
@@ -5140,7 +5144,7 @@ void InstParser::preprocess(CFG* cfg, State* &s, const Instruction* I, string fu
             Value* v1 = I->getOperand(0);
             unsigned numBits = getNumBits(v1);
             string varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-            string varName = func+"_"+varNum;
+            string varName = func+"."+varNum;
 
             if(cfg->hasVariable(varName)){
             
@@ -5170,7 +5174,7 @@ void InstParser::preprocess(CFG* cfg, State* &s, const Instruction* I, string fu
                 Variable *var = cfg->getVariable(varName);
 
                 VarType type = var->type;
-                string tempName = varName+"_t";
+                string tempName = varName+".t";
                 if(cfg->hasVariable(tempName))
                     errs()<<"0.Preprocess error 10086: "<<tempName<<"\n";
                 else{
@@ -5227,7 +5231,7 @@ void InstParser::preprocess(CFG* cfg, State* &s, const Instruction* I, string fu
         Value* v1 = I->getOperand(1);
         unsigned numBits = getNumBits(v1);
         string varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
-        string varName = func+"_"+varNum;
+        string varName = func+"."+varNum;
 
         if(cfg->hasVariable(varName)){
             
@@ -5257,7 +5261,7 @@ void InstParser::preprocess(CFG* cfg, State* &s, const Instruction* I, string fu
             Variable *var = cfg->getVariable(varName);
 
             VarType type = var->type;
-            string tempName = varName+"_t";
+            string tempName = varName+".t";
             if(cfg->hasVariable(tempName))
                 errs()<<"0.Preprocess error 10086: "<<tempName<<"\n";
             else{
