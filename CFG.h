@@ -364,9 +364,9 @@ public:
 class Verify{
 public:
     virtual ~Verify();
-    virtual bool check(CFG* ha, vector<int> path)=0;
+    virtual bool check(CFG* ha, vector<int> &path)=0;
     virtual vector<IndexPair> get_core_index()=0;
-    virtual void print_sol(CFG* cfg)=0;
+    // virtual void print_sol(CFG* cfg)=0;
     virtual double getTime()=0;
 };
 

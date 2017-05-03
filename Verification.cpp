@@ -69,7 +69,6 @@ void BoundedVerification::DFS(int intbound,int bound,int start, int end){
 
     if(verify->check(cfg, path)){   //the path is feasible, terminate
         num_of_path++;
-
         if(reachEnd){
             reachPath=get_name(cfg,path);
             for(unsigned i=0;i<path.size();i++){
@@ -136,7 +135,7 @@ bool BoundedVerification::check(string check){
             originLine=line-1;
         if( result ){
             errs()<<"at line "<<originLine<<" in state "<<target_name<<" is reachable, When\n";
-            verify->print_sol(cfg);
+            // verify->print_sol(cfg);
             errs()<<"Number of path checked:"<<num_of_path<<"\n";
 
             if(outMode==1){

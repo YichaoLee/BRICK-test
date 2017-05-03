@@ -237,7 +237,7 @@ LinearVerify::~LinearVerify(){
 }
 /* verify the feasibility of the path return true:sat false:unsat  */
 
-bool LinearVerify::check(CFG* ha, vector<int> path){
+bool LinearVerify::check(CFG* ha, vector<int> &path){
     clear();
 
     if(outMode==1)
@@ -1594,7 +1594,7 @@ bool LinearVerify::get_constraint(Constraint *con, LinearVarTable *table, int ti
 
 
 /*encode the abstract into a linear costraint set */
-z3::expr_vector LinearVerify::encode_path(CFG* ha, vector<int> patharray){
+z3::expr_vector LinearVerify::encode_path(CFG* ha, vector<int> &patharray){
     LinearVarTable *table = new LinearVarTable(c, ha);
 
     int state_num=(patharray.size()+1)/2;

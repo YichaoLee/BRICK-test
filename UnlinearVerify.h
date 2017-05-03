@@ -86,8 +86,8 @@ class UnlinearVerify: public Verify{
     dreal_expr mk_function_expr(Variable *lv, ParaVariable rpv, UnlinearVarTable *table, int time);
 
     dreal_expr tran_constraint(Constraint *con, UnlinearVarTable *table, int time);
-    void get_constraint(vector<Constraint> consList, UnlinearVarTable *table, int time, bool isTransition);
-    void encode_path(CFG* ha, vector<int> patharray);
+    void get_constraint(vector<Constraint> &consList, UnlinearVarTable *table, int time, bool isTransition);
+    void encode_path(CFG* ha, vector<int> &patharray);
 
     std::vector<IndexPair> index_cache; 
     std::vector<IndexPair> core_index;
@@ -98,11 +98,12 @@ class UnlinearVerify: public Verify{
     void clear(){
         index_cache.clear();
         core_index.clear();
+        dreal_reset(ctx);
+        errs()<<"Reset dreal_context\n";
         if(table)
             delete table;
         table = NULL;
 
-        dreal_reset(ctx);
         //dreal_del_context(ctx);
         ctx = dreal_mk_context(qf_nra);
         dreal_set_precision(ctx, precision);
@@ -134,7 +135,7 @@ public:
     void setOutMode(int output){
         this->outMode = output;
     }
-    bool check(CFG* ha, vector<int> path);
+    bool check(CFG* ha, vector<int> &path);
     vector<IndexPair> get_core_index(){return core_index;}
     ~UnlinearVerify();
     void print_sol(CFG* cfg);

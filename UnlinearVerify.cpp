@@ -20,10 +20,11 @@ using namespace std;
             if(inputID<cfg->mainInput.size()&&cfg->mainInput[inputID]==i){
 
                 if(type==FP)
-                    x.push_back(dreal_mk_real_var(ctx, var.name.c_str(), -1000.0, 1000.0));
-//                x.push_back(dreal_mk_unbounded_real_var(ctx, var.name.c_str()));
+                    // x.push_back(dreal_mk_real_var(ctx, var.name.c_str(), -1000.0, 1000.0));
+                    x.push_back(dreal_mk_unbounded_real_var(ctx, var.name.c_str()));
                 else if(type==INT)
-                    x.push_back(dreal_mk_int_var(ctx, var.name.c_str(), -1000.0, 1000.0));
+                    // x.push_back(dreal_mk_int_var(ctx, var.name.c_str(), -1000.0, 1000.0));
+                    x.push_back(dreal_mk_unbounded_int_var(ctx, var.name.c_str()));
                 exprMap[i] = var_num;
 //                double const x_lb = dreal_get_lb(ctx, x[var_num]);
 //                double const x_ub = dreal_get_ub(ctx, x[var_num]);
@@ -177,18 +178,16 @@ using namespace std;
 /***********************************check with dReal*********************************************/
 
 UnlinearVerify::~UnlinearVerify(){
+    dreal_del_context(ctx);
     if(table)
         delete table;
     table = NULL;
-    dreal_del_context(ctx);
     index_cache.clear();
     core_index.clear();
 }
 
-bool UnlinearVerify::check(CFG* ha, vector<int> path)
+bool UnlinearVerify::check(CFG* ha, vector<int> &path)
 {
-    clear();
-
     if(outMode==1)
         printPath(ha, path);
     
@@ -209,6 +208,8 @@ bool UnlinearVerify::check(CFG* ha, vector<int> path)
 
     time = 1000*(double)(finish-start)/CLOCKS_PER_SEC;
 //        errs()<<"Time:\t"<<ConvertToString(time_used)<<"ms\n";
+
+    // print_sol(ha);
     if(res == true){
         if(outMode==1)
             cerr<<"dreal_result is sat\n\n\n";
@@ -222,12 +223,12 @@ bool UnlinearVerify::check(CFG* ha, vector<int> path)
 void UnlinearVerify::print_sol(CFG* cfg) {
     vector<unsigned> &x = cfg->mainInput;
     for(unsigned i=0;i<x.size();i++){
-
+        errs()<<cfg->variableList[x[i]].name<<" = [";
         dreal_expr mainInput = table->getX(static_cast<int>(x[i]));
 
         double const x_lb = dreal_get_lb(ctx, mainInput);
         double const x_ub = dreal_get_ub(ctx, mainInput);
-        errs()<<cfg->variableList[x[i]].name<<" = ["<<x_lb<<", "<<x_ub<<"]\n";
+        errs()<<x_lb<<", "<<x_ub<<"]\n";
     }
     return;
 }
@@ -255,6 +256,11 @@ void UnlinearVerify::dreal_mk_tobv_expr(dreal_context ctx, dreal_expr x, string 
                             dreal_mk_eq(ctx, xt_val, x), 
                             dreal_mk_eq(ctx, xt_val, dreal_mk_minus(ctx, dreal_mk_num(ctx, pow(2.0, num)), x)));
     dreal_assert(ctx, xt_ast);
+    if(outMode==1){
+        cerr<<"(assert ";
+        dreal_print_expr(xt_ast);
+        cerr<<")"<<endl;
+    }
     dreal_expr *xt = new dreal_expr[num];
 
     for(unsigned i=0;i<num;i++){
@@ -264,13 +270,13 @@ void UnlinearVerify::dreal_mk_tobv_expr(dreal_context ctx, dreal_expr x, string 
     }
 
     dreal_expr ast = dreal_mk_eq(ctx, xt_val, dreal_mk_plus(ctx, xt, num));
+    dreal_assert(ctx, ast);
     if(outMode==1){
         cerr<<"(assert ";
         dreal_print_expr(ast);
         cerr<<")"<<endl;
     }
     delete[] xt;
-    dreal_assert(ctx, ast);
 
     return;
 }
@@ -352,22 +358,22 @@ dreal_expr UnlinearVerify::dreal_mk_REM(dreal_context ctx, dreal_expr y, dreal_e
     dreal_expr div_real = dreal_mk_unbounded_real_var(ctx, real_name.c_str());
     dreal_expr div_expr = dreal_mk_unbounded_int_var(ctx, div_name.c_str());
     dreal_expr ast_t = dreal_mk_eq(ctx, div_real, dreal_mk_div(ctx, y, z));
+    dreal_assert(ctx, ast_t);
     if(outMode==1){
         cerr<<"(assert ";
         dreal_print_expr(ast_t);
         cerr<<")"<<endl;
     }
-    dreal_assert(ctx, ast_t);
 
     dreal_expr ast_tleq = dreal_mk_leq(ctx, div_expr, div_real);
     dreal_expr ast_tgt = dreal_mk_gt(ctx, div_expr, dreal_mk_minus(ctx, div_real, dreal_mk_num(ctx, 1)));
     dreal_expr ast_and = dreal_mk_and_2(ctx, ast_tleq, ast_tgt);
+    dreal_assert(ctx, ast_and);
     if(outMode==1){
         cerr<<"(assert ";
         dreal_print_expr(ast_and);
         cerr<<")"<<endl;
     }
-    dreal_assert(ctx, ast_and);
 
     dreal_expr ast = dreal_mk_minus(ctx, y, dreal_mk_times_2(ctx, div_expr, z));
     return ast;
@@ -1175,9 +1181,13 @@ dreal_expr UnlinearVerify::mk_compare_expr(Variable *lv, ParaVariable rpv, Unlin
         rval = getCMP(rvlval, rvrval, pvop);
         table->setVal(lv->ID, rval);
     }
-    dreal_expr assign = dreal_mk_ite(ctx, cmp, 
-                                    dreal_mk_eq(ctx, exprl, dreal_mk_num(ctx, 1)),
-                                     dreal_mk_eq(ctx, exprl, dreal_mk_num(ctx, 0)));
+    // dreal_expr assign = dreal_mk_ite(ctx, cmp, 
+    //                                 dreal_mk_eq(ctx, exprl, dreal_mk_num(ctx, 1)),
+    //                                  dreal_mk_eq(ctx, exprl, dreal_mk_num(ctx, 0)));
+
+    dreal_expr assign = dreal_mk_eq(ctx, exprl, dreal_mk_ite(ctx, cmp, 
+                                                    dreal_mk_num(ctx, 1),
+                                                        dreal_mk_num(ctx, 0)));
     
     return assign;
 }
@@ -1952,7 +1962,7 @@ dreal_expr UnlinearVerify::tran_constraint(Constraint *con, UnlinearVarTable *ta
 
 }
 
-void UnlinearVerify::get_constraint(vector<Constraint> consList, UnlinearVarTable *table, int time, bool isTransition){
+void UnlinearVerify::get_constraint(vector<Constraint> &consList, UnlinearVarTable *table, int time, bool isTransition){
    
     /* 
     unsigned size = consList.size();
@@ -1981,8 +1991,16 @@ void UnlinearVerify::get_constraint(vector<Constraint> consList, UnlinearVarTabl
             }
 */
             dreal_assert(ctx, ast);
+            // dreal_result res = dreal_check( ctx );
+
+            // if(res == l_true){
+            //     errs()<<"sat\n";
+            // }
+            // else{
+            //     errs()<<"unsat\n";
+            // }
             if(outMode==1){
-		cerr<<"(assert ";
+                cerr<<"(assert ";
                 dreal_print_expr(ast);
                 cerr<<")"<<endl;
             }
@@ -1992,6 +2010,7 @@ void UnlinearVerify::get_constraint(vector<Constraint> consList, UnlinearVarTabl
                 //cerr<<"......"<<"\n";
             }
         }
+
     }
 /*
     if(isOR){
@@ -2003,8 +2022,9 @@ void UnlinearVerify::get_constraint(vector<Constraint> consList, UnlinearVarTabl
 */
 }
 
-void UnlinearVerify::encode_path(CFG* ha, vector<int> patharray)
+void UnlinearVerify::encode_path(CFG* ha, vector<int> &patharray)
 {
+    clear();
     table = new UnlinearVarTable(ctx, ha);
 
     int state_num =     (patharray.size()+1)/2;
@@ -2034,10 +2054,15 @@ void UnlinearVerify::encode_path(CFG* ha, vector<int> patharray)
 
         }
     }
-    delete table;
-    table = NULL;
 //    cerr<<"Path encode complete~~~~~~~~~~~~~~~~~~ "<<endl;
+    dreal_result res = dreal_check( ctx );
 
+    if(res == l_true){
+        errs()<<"sat\n";
+    }
+    else{
+        errs()<<"unsat\n";
+    }
 }
 
 bool UnlinearVerify::analyze_unsat_core(int state){

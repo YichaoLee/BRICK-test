@@ -51,7 +51,7 @@ class LinearVerify: public Verify{
     DebugInfo *dbg;
     double time;
 
-    z3::expr_vector encode_path(CFG* ha, vector<int> path);
+    z3::expr_vector encode_path(CFG* ha, vector<int> &path);
     z3::expr getExpr(Variable *v, bool &treat, double &val, LinearVarTable *table);
     z3::expr getCMPExpr(Variable *v, LinearVarTable *table);
     // z3::expr mk_INT_cmp(z3::expr y, z3::expr z, Op_m pvop);
@@ -78,7 +78,7 @@ public:
     LinearVerify();
     LinearVerify(DebugInfo *d, int mode);
     ~LinearVerify();
-    bool check(CFG* ha, vector<int> path);
+    bool check(CFG* ha, vector<int> &path);
     vector<IndexPair> get_core_index(){return core_index;}
     double getTime(){return time;}
     void print_sol(CFG* cfg);
