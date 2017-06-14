@@ -11,8 +11,10 @@
 #include "minisat/core/Solver.h"
 //#include "dreal_c.h"
 #include <fstream>
+#include <thread>
 #include "LinearVerify.h"
-#include "UnlinearVerify.h"
+#include "NonlinearZ3Verify.h"
+#include "NonlinearVerify.h"
 
 class BoundedVerification{
 public:

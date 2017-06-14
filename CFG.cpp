@@ -424,7 +424,7 @@ raw_ostream& operator << (raw_ostream& os, Transition object){
         errs()<<"null\n";
     else{
         for(unsigned int i=0;i<object.guardList.size();i++)
-            errs()<<object.guardList[i]<<" ";
+            errs()<<"\t"<<object.guardList[i]<<"\n";
         errs()<<"\n";
     }
     return os;
@@ -440,7 +440,7 @@ raw_ostream& operator << (raw_ostream& os, State object){
         errs()<<"null\n";
     else{
         for(unsigned int i=0;i<object.consList.size();i++)
-            errs()<<object.consList[i]<<" ";
+            errs()<<"\t"<<object.consList[i]<<"\n";
         errs()<<"\n";
     }
     errs()<<"Content:"<<object.ContentRec<<"\n";
@@ -453,13 +453,13 @@ void CFG::print(){
     printLinearMode();
     unsigned mainInputID=0;
     unsigned mainSize = mainInput.size();
-    for(unsigned i=0;i<variableList.size();i++){ 
-	if(variableList[i].type==PTR)
+    for(unsigned i=0;i<exprList.size();i++){ 
+	if(exprList[i].type==PTR)
 		continue;
 	errs()<<"(declare-fun ";
-	errs()<<variableList[i].name;
+	errs()<<exprList[i].name;
 	errs()<<" () ";
-	if(variableList[i].type==INT)
+	if(exprList[i].type==INT)
 		errs()<<"Int";
 	else
 		errs()<<"Real";

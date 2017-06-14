@@ -85,7 +85,7 @@
  /home/lich/Documents/llvm/include/llvm/Support/Dwarf.h \
  /home/lich/Documents/llvm/include/llvm/IR/TypeBuilder.h general.h \
  MinisatDebug.h LinearVerify.h MUSSAnalyzer.h DebugInfo.h \
- UnlinearVerify.h
+ NonlinearZ3Verify.h NonlinearVerify.h
 
 Verification.h:
 
@@ -269,4 +269,6 @@ MUSSAnalyzer.h:
 
 DebugInfo.h:
 
-UnlinearVerify.h:
+NonlinearZ3Verify.h:
+
+NonlinearVerify.h:

@@ -25,6 +25,7 @@ using namespace llvm;
 
 enum Operator{
     ASSIGN,
+    ASSUME,
     EQ,NE,
     SLT,SLE,SGT,SGE,
     ULT,ULE,UGT,UGE,
@@ -293,6 +294,7 @@ class CFG{
         vector<State> stateList;
         vector<Transition> transitionList;//at the same time  ,equals to the transList
         vector<Variable> variableList;
+        vector<Variable> exprList;
         vector<unsigned> mainInput;
         //vector<Transition*> transitionList1;
         Constraint c_tmp1;
@@ -363,6 +365,7 @@ public:
 
 class Verify{
 public:
+    Verify(){};
     virtual ~Verify();
     virtual bool check(CFG* ha, vector<int> &path)=0;
     virtual vector<IndexPair> get_core_index()=0;

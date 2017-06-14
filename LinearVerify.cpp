@@ -102,12 +102,18 @@ const int BitPerByte = 8;
     }
 
     void LinearVarTable::setAlias(int ID1, int ID2){
+        int count = alias.count(ID2);
+        if(count)
+            ID2 = alias[ID2];
         alias[ID1] = ID2;
     }
 
     void LinearVarTable::setAlias(Variable *v1, Variable *v2){
         int ID1=v1->ID;
         int ID2=v2->ID;
+        int count = alias.count(ID2);
+        if(count)
+            ID2 = alias[ID2];
         alias[ID1] = ID2;
     }
 
@@ -124,8 +130,19 @@ const int BitPerByte = 8;
     }
     
     z3::expr LinearVarTable::getX(int ID){
+        int count = alias.count(ID);
+        if(count)
+            ID = alias[ID];
         int ID2 = exprMap[ID];
         return x[ID2];
+    }
+
+    void LinearVarTable::setX(int ID, z3::expr expr){
+        int count = alias.count(ID);
+        if(count)
+            ID = alias[ID];
+        int ID2 = exprMap[ID];
+        x[ID2] = expr;
     }
 
     int LinearVarTable::load(int ID){
@@ -206,7 +223,12 @@ const int BitPerByte = 8;
             return false;
         }
     }
-
+    void LinearVarTable::printAliasMap(){
+        errs()<<"AliasMap:\n";
+        for(map<int,int>::iterator it=alias.begin();it!=alias.end();++it){
+            errs()<<cfg->variableList[it->first]<<"\t\t"<<cfg->variableList[it->second]<<"\n";
+        }
+    }
     map<int, double> LinearVarTable::getValmap(){
            return varVal;
     }
@@ -222,11 +244,11 @@ const int BitPerByte = 8;
 /********************************class LinearVerify***********************************/
 /*******************************solution of linear problems by z3**********************************/
 LinearVerify::LinearVerify(){
-	time=0;
+	solverTime=0;
 }
 
 LinearVerify::LinearVerify(DebugInfo *d, int mode){
-    time=0;
+    solverTime=0;
     this->dbg = d;
     this->outMode = mode;
 }
@@ -251,24 +273,24 @@ bool LinearVerify::check(CFG* ha, vector<int> &path){
         z3::expr_vector problem = encode_path(ha, path);
         start = clock();
 
-        SubsetSolver csolver(c, problem);
+        SubsetSolver csolver(c, problem, true);
         MapSolver msolver(csolver.size());
         bool res = analyze_unsat_core(csolver, msolver);
 
         finish=clock();
 
-        time = 1000*(double)(finish-start)/CLOCKS_PER_SEC;
+        solverTime = 1000*(double)(finish-start)/CLOCKS_PER_SEC;
         
         if(!res){
             if(outMode==1)
                 cerr<<"z3_result is sat\n\n\n";
-              return true;
+            return true;
         }
-      }
-       catch (z3::exception ex) {
-              cerr << "Error: " << ex << "\n";
-            throw_error("fatal error: z3 exception");
-       }
+    }
+    catch (z3::exception ex) {
+        cerr << "Error: " << ex << "\n";
+        throw_error("fatal error: z3 exception");
+    }
     if(outMode==1)
         cerr<<"z3_result is unsat\n\n\n";
     return false;
@@ -500,7 +522,7 @@ z3::expr LinearVerify::mk_eq_ast(z3::expr a, z3::expr b){
 z3::expr LinearVerify::mk_assignment_ast(Constraint *con, LinearVarTable *table, int time){
     
     z3::expr ast(c); 
-    z3::expr exprl(c); 
+    // z3::expr exprl(c); 
     z3::expr exprr(c);
 
     ParaVariable lpv = con->lpvList;
@@ -517,14 +539,14 @@ z3::expr LinearVerify::mk_assignment_ast(Constraint *con, LinearVarTable *table,
             table->setAlias(lv, rv);
         }
         else
-        	ast = mk_ptr_operation_expr(lv, rpv, table);
+        	ast = mk_ptr_operation_expr(lv, rpv, table, time);
     }
     else{
     	if(!rpv.isExp){
 
-    		if(time>0)
-                table->setX(lv->ID, time, lv->type, lv->numbits, c);
-            exprl = table->getX(lv->ID);
+    		// if(time>0)
+      //           table->setX(lv->ID, time, lv->type, lv->numbits, c);
+      //       exprl = table->getX(lv->ID);
 
     		Variable *rv = table->getAlias(rpv.rvar);
 
@@ -535,21 +557,24 @@ z3::expr LinearVerify::mk_assignment_ast(Constraint *con, LinearVarTable *table,
     			exprr = getExpr(rv, treat, val, table);
 
     			table->setVal(lv->ID, val);
+                table->setX(lv->ID, exprr);
+                // ast = mk_eq_ast(exprl, exprr);
     		}
     		else{
-    			exprr = table->getX(rv->ID);
+    			
+                // exprr = table->getX(rv->ID);
+                table->setAlias(lv->ID, rv->ID);
                 double val = 0;
 
                 if(table->getVal(rv->ID, val))
                     table->setVal(lv->ID, val);
     		}
-    		ast = mk_eq_ast(exprl, exprr);
     	}
     	else{
 
-    		if(time>0)
-                table->setX(lv->ID, time, lv->type, lv->numbits, c);
-            exprl = table->getX(lv->ID);
+    		// if(time>0)
+      //           table->setX(lv->ID, time, lv->type, lv->numbits, c);
+      //       exprl = table->getX(lv->ID);
 
 	    	Op_m pvop = rpv.op;
 	    	switch(pvop){
@@ -567,8 +592,11 @@ z3::expr LinearVerify::mk_assignment_ast(Constraint *con, LinearVarTable *table,
                     treat = table->getVal(rr, val);
                     if(treat)
                         table->setVal(lv->ID, val);
-                    exprr = table->getX(rr);
-                    ast = mk_eq_ast(exprl, exprr);
+                    
+                    table->setAlias(lv->ID, rr);
+                    
+                    // exprr = table->getX(rr);
+                    // ast = mk_eq_ast(exprl, exprr);
 
                     break;
 	    		}
@@ -605,7 +633,7 @@ z3::expr LinearVerify::mk_assignment_ast(Constraint *con, LinearVarTable *table,
     return ast;
 }
 
-z3::expr LinearVerify::mk_ptr_operation_expr(Variable *lv, ParaVariable rpv, LinearVarTable *table){
+z3::expr LinearVerify::mk_ptr_operation_expr(Variable *lv, ParaVariable rpv, LinearVarTable *table, int time){
 	Op_m pvop = rpv.op;
 	z3::expr Expr(c);
     switch(pvop){
@@ -650,7 +678,17 @@ z3::expr LinearVerify::mk_ptr_operation_expr(Variable *lv, ParaVariable rpv, Lin
                 assert(false && "Mk_ptr_operation_expr STORE GetVal error!!");
             }
             int allocaID = (int)val;
+
             Variable *rv = table->getAlias(rpv.rvar);
+
+            if(rv->type!=PTR){
+                z3::expr exprr = table->getX(rv->ID);
+                if(time>=0)
+                    table->setX(rv->ID, time, rv->type, rv->numbits, c);
+                z3::expr exprl = table->getX(rv->ID);
+                Expr = mk_eq_ast(exprl, exprr);
+            }
+
             table->store(allocaID, rv->ID);
             break;
         }
@@ -840,20 +878,23 @@ z3::expr LinearVerify::mk_convert_expr(Variable *lv, ParaVariable rpv, LinearVar
 
     exprr = z3::to_expr(c, temp);
 
-    return mk_eq_ast(exprl, exprr);;
+    table->setX(lv->ID, exprr);
+    return z3::expr(c);
+
+    // return mk_eq_ast(exprl, exprr);;
 }
 
 z3::expr LinearVerify::mk_binaryop_expr(Variable *lv, ParaVariable rpv, LinearVarTable *table, int time){
 
-	z3::expr exprl(c); 
+	// z3::expr exprl(c); 
     z3::expr exprr(c);
     assert(rpv.isExp && "Mk_binaryop_expr error: rpv is not a expression!!");
 
 	Op_m pvop = rpv.op;
     
-    if(time>0)
-    	table->setX(lv->ID, time, lv->type, lv->numbits, c);
-    exprl = table->getX(lv->ID);
+    // if(time>0)
+    // 	table->setX(lv->ID, time, lv->type, lv->numbits, c);
+    // exprl = table->getX(lv->ID);
 
     Variable *rvl = table->getAlias(rpv.lvar);
     Variable *rvr = table->getAlias(rpv.rvar);
@@ -1090,7 +1131,10 @@ z3::expr LinearVerify::mk_binaryop_expr(Variable *lv, ParaVariable rpv, LinearVa
         table->setVal(lv->ID, rval);
     exprr = z3::to_expr(c, temp);
 
-    return mk_eq_ast(exprl, exprr);;
+    table->setX(lv->ID, exprr);
+    return z3::expr(c);
+
+    // return mk_eq_ast(exprl, exprr);;
 }
 
 z3::expr LinearVerify::mk_compare_expr(Variable *lv, ParaVariable rpv, LinearVarTable *table, int time){
@@ -1141,21 +1185,24 @@ z3::expr LinearVerify::mk_compare_expr(Variable *lv, ParaVariable rpv, LinearVar
     	table->setVal(lv->ID, rval);
     }
     z3::expr condition = z3::to_expr(c, temp);
-    z3::expr ast = ite(condition, (exprl==c.bv_val(1,1)), (exprl==c.bv_val(0,1)));
+    z3::expr ast = ite(condition, c.bv_val(1,1), c.bv_val(0,1));
 
-    return ast;
+    table->setX(lv->ID, ast);
+    return z3::expr(c);
+
+    // return ast;
 }
 
 z3::expr LinearVerify::mk_function_expr(Variable *lv, ParaVariable rpv, LinearVarTable *table, int time){
-	z3::expr exprl(c); 
+	// z3::expr exprl(c); 
     z3::expr exprr(c);
     assert(rpv.isExp && "Mk_compare_expr error: rpv is not a expression!!");
 
 	Op_m pvop = rpv.op;
     
-    if(time>0)
-    	table->setX(lv->ID, time, lv->type, lv->numbits, c);
-    exprl = table->getX(lv->ID);
+    // if(time>0)
+    // 	table->setX(lv->ID, time, lv->type, lv->numbits, c);
+    // exprl = table->getX(lv->ID);
 
     Variable *rv = table->getAlias(rpv.rvar);
 
@@ -1260,15 +1307,19 @@ z3::expr LinearVerify::mk_function_expr(Variable *lv, ParaVariable rpv, LinearVa
     }
 
     exprr = z3::to_expr(c, temp);
+    
+    table->setX(lv->ID, exprr);
+    return z3::expr(c);
 
-    return mk_eq_ast(exprl, exprr);
+    // return mk_eq_ast(exprl, exprr);
 }
 
 
 /* transform constraints into smt2 with z3 api */
 bool LinearVerify::get_constraint(Constraint *con, LinearVarTable *table, int time, z3::expr_vector &p){
 
-    // errs()<<*con<<"\n";
+    // if(outMode)
+    //     errs()<<*con<<"\n";
     dbg->getConsInfo(con);
     Operator op = con->op;
     
@@ -1586,9 +1637,9 @@ bool LinearVerify::get_constraint(Constraint *con, LinearVarTable *table, int ti
 	    return true;
 	}
 	
-	if(outMode==1){
-	    cerr<<"......"<<"\n";
-	}
+	// if(outMode==1){
+	//     cerr<<"......"<<"\n";
+	// }
     return false;
 }
 

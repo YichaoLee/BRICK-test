@@ -2840,6 +2840,10 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
 
     if(op == "alloca"){
         string varName = func+"."+getDesVarName(I);
+        cerr<<varName<<endl;
+        //do nothing with main.retval
+        if(varName=="main.retval")
+            return;
 
         const AllocaInst *AI = dyn_cast<AllocaInst>(I);
         Type *Ty = AI->getAllocatedType();
@@ -3308,10 +3312,16 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
         string varNum = getVariableName(Out, v1, &TypePrinter, &Machine, TheModule);
         string varName = func+"."+varNum;
 
-
         Value* v2 = I->getOperand(1);
         string varNum2 = getVariableName(Out, v2, &TypePrinter, &Machine, TheModule);
         string varName2 = func+"."+varNum2;
+
+        //do nothing with main.retval
+        if(varName2=="main.retval")
+            return;
+
+        if(cfg->hasVariable(varName))
+            cfg->exprList.push_back(cfg->getVariable(varName));
 
         Type *Ty = v1->getType();
 
@@ -3519,8 +3529,8 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
         	*/
 
         
-        // if(pTemp2.op==MUL&&!isNumVal(pTemp2.lvar)&&!isNumVal(pTemp2.rvar))
-        //     cfg->setUnlinear();
+        if(pTemp2.op==MUL&&!isNumVal(pTemp2.lvar)&&!isNumVal(pTemp2.rvar))
+            cfg->setUnlinear();
         
         // else 
         if((pTemp2.op==SDIV || pTemp2.op==UDIV || pTemp2.op==FDIV)&&!isNumVal(pTemp2.rvar))
@@ -3752,11 +3762,10 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
         else{
             Variable var(c, cfg->counter_variable++, type, numBits);
             cfg->variableList.push_back(var);
+            cfg->exprList.push_back(var);
             pTemp1.rvar = new Variable(var);
             pTemp1.isExp=false;
         }
-
-        cTemp.op = ASSIGN;
 
         const PHINode *PN = dyn_cast<PHINode>(I);
 
@@ -3766,12 +3775,15 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
             string varNum = getVariableName(Out, v, &TypePrinter, &Machine, TheModule);
             string varName = func+"."+varNum;
             if(isa<ConstantInt>(v)){
+                cTemp.op = EQ;
                 pTemp2.rvar = new Variable(varNum,-1,INTNUM,numBits);
             }
             else if(isa<ConstantFP>(v)){
+                cTemp.op = EQ;
 	            pTemp2.rvar = new Variable(varNum,-1,FPNUM,numBits);
 	        } 
             else if(cfg->hasVariable(varName)){
+                cTemp.op = ASSIGN;
                 Variable *var = cfg->getVariable(varName);
                 if(var->type!=type)
                     errs()<<"2.PHINode error 10086: "<<varName<<"\n";
@@ -3927,7 +3939,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
                     cfg->transitionList.push_back(*tr2);//follow the transList
                 }
             }
-            else if(n1==1){//signle br
+            else if(n1==1){//single br
                 toLabel1=func+"."+varName;
                 tr1->toLabel=toLabel1;
                 State* s1 = cfg->getLabelState(toLabel1);
@@ -4010,7 +4022,8 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
             pTemp1.rvar = new Variable("nan",-1,FPNUM,numBits);
 
             cTemp.op = EQ;
-            cTemp.lpvList = pTemp1;
+            cTemp.lpvList = pTemp1;\
+
             cTemp.rpvList = pTemp2;
             s->consList.push_back(cTemp);
             return;
@@ -4028,7 +4041,7 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
             pTemp1.rvar = new Variable("inf",-1,FPNUM,numBits);
 
             cTemp.op = EQ;
-            cTemp.lpvList = pTemp1;
+            cTemp.lpvList = pTemp1;l
             cTemp.rpvList = pTemp2;
             s->consList.push_back(cTemp);
             return;
@@ -4223,15 +4236,15 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
             string varName = func+"."+varNum;
             numBits = getNumBits(v1);
 
-            pTemp1.rvar = new Variable("0",-1,INTNUM,numBits);
+            pTemp1.rvar = new Variable("1",-1,INTNUM,numBits);
             if(cfg->hasVariable(varName)){
             	Variable *var = cfg->getVariable(varName);
             	assert(numBits==var->numbits && "__VERIFIER_assume argument error!!!");
                 pTemp2.rvar = new Variable(var);
             }
-            cTemp.op = NE;
-            cTemp.lpvList = pTemp1;
-            cTemp.rpvList = pTemp2;
+            cTemp.op = EQ;
+            cTemp.lpvList = pTemp2;
+            cTemp.rpvList = pTemp1;
             s->consList.push_back(cTemp);
             return;
         }
@@ -4628,6 +4641,7 @@ string InstParser::setGlobalConstraint(string name, Constant *Initial, CFG *cfg,
                 //var = store dataVar
                 p2.op = STORE;
                 p2.rvar = new Variable(dataVar);
+                cfg->exprList.push_back(dataVar);
             }
             else
             	assert(false && "Global dataname is already existed!!!");
@@ -4814,6 +4828,7 @@ void InstParser::setVariable(CFG* cfg, State * s, Type *Ty, string name, bool in
         }
         p2.rvar = new Variable(dataVar);
         p2.op = STORE;
+        cfg->exprList.push_back(dataVar);
     }
     else{
         Variable dataVar;

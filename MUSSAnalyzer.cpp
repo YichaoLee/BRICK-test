@@ -17,11 +17,11 @@ int SubsetSolver::get_id(expr x){
         return atoi(v.name().str().c_str());
 }
 
-SubsetSolver::SubsetSolver(context& _c, expr_vector _constraints):c(_c),s(_c),constraints(_constraints){
+SubsetSolver::SubsetSolver(context& _c, expr_vector _constraints, bool _unsat_core):c(_c),s(_c),constraints(_constraints),unsat_core(_unsat_core){
         n = constraints.size();
         params p(c);
-        p.set(":unsat-core",true);
-        p.set(":auto-config",false);
+        p.set(":unsat-core",unsat_core);
+        p.set(":auto-config",!unsat_core);
         s.set(p);
         for(unsigned i=0;i<n;i++)
             s.add(implies(c_var(i), constraints[i]));
@@ -38,9 +38,20 @@ expr SubsetSolver::get_constraint(int i){
         return constraints[i];
 }
 
+void SubsetSolver::printVector(vector<int> &seed){
+    for(vector<int>::iterator it=seed.begin();it<seed.end();it++)
+        cerr<<*it<<"\t:"<<get_constraint(*it)<<endl;
+    cerr<<endl;
+}
+
 bool SubsetSolver::check_subset(vector<int> seed){
         expr_vector assumptions=to_c_lits(seed);
 //        cout<<"assumptions: "<<assumptions<<endl;
+        switch(s.check(assumptions)){
+            case sat:cerr<<"sat"<<endl;
+            case unsat:cerr<<"unsat"<<endl;
+            default:cerr<<"unknown"<<endl;
+        }
         return (s.check(assumptions) == sat);
 }
 
@@ -54,8 +65,11 @@ expr_vector SubsetSolver::to_c_lits(vector<int> seed){
 vector<int> SubsetSolver::seed_from_core(){
         vector<int> seed;
         expr_vector core = s.unsat_core();
-        for(unsigned i=0;i<core.size();i++)
+        cerr<<"unsat_core:\t"<<core<<endl;
+        for(unsigned i=0;i<core.size();i++){
             seed.push_back(get_id(core[i]));
+        }
+        printVector(seed);
         return seed;
 }
 
@@ -63,7 +77,9 @@ vector<int> SubsetSolver::shrink(vector<int> seed){
         vector<int> core = seed_from_core();
         for(unsigned i=0;i<seed.size();i++){
             remove(core, seed[i]);
-            if(s.check(to_c_lits(core)) == sat)
+            // printVector(core);
+            expr_vector core_exprs = to_c_lits(core);
+            if(s.check(core_exprs) != unsat)
 				core.push_back(seed[i]);
         }
         return core;

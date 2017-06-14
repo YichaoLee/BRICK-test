@@ -17,11 +17,13 @@ BoundedVerification::BoundedVerification(CFG* aut, int bound, vector<int> target
     reachEnd = false;
     num_of_path=0;
     bool isLinear = cfg->isLinear();
+    verify = NULL;
     if(isLinear){
         verify = new LinearVerify(dbg, outMode);
     }
     else{
-        verify = new UnlinearVerify(precision, dbg, outMode);
+        verify = new NonlinearVerify(pre, dbg, outMode);
+        // verify = new NonlinearZ3Verify(dbg, outMode);
     }
 }
 
@@ -59,13 +61,16 @@ void BoundedVerification::DFS(int intbound,int bound,int start, int end){
             path.pop_back();
         path.push_back(temp);
     }
-
-    path.push_back(start);
+    if(path.empty()||verify->check(cfg, path))
+        path.push_back(start);
+    else
+        return;
     
     if(start==end){
         reachEnd = true;
         target_name=cfg->getNodeName(end);
     }
+
 
     if(verify->check(cfg, path)){   //the path is feasible, terminate
         num_of_path++;
@@ -78,7 +83,7 @@ void BoundedVerification::DFS(int intbound,int bound,int start, int end){
             return;
         }
         else {
-            for(unsigned int i=0;i<cfg->searchState(start)->transList.size();i++){
+            for(int i=cfg->searchState(start)->transList.size()-1;i>=0;--i){
                 State *s = cfg->searchState(start)->transList[i]->toState;
                 if(s==NULL) continue;
                 path.push_back(cfg->searchState(start)->transList[i]->ID);
@@ -118,10 +123,12 @@ bool BoundedVerification::check(string check){
         if(outMode==1)
             errs()<<"target["<<i<<"]:"<<cfg->stateList[target[i]].name<<"("<<target[i]<<")\n";
         int targetID = target[i];
-	if(cfg->isLinear())	
-		result=solve(targetID);
-	else        
-		DFS(bound,bound,cfg->initialState->ID,targetID);
+        
+    	if(cfg->isLinear())	
+    		result=solve(targetID);
+    	else        
+    		DFS(bound,bound,cfg->initialState->ID,targetID);
+
         string name = cfg->stateList[targetID].name;
         if(name.at(0)=='q')
             line = cfg->stateList[targetID].locList[0];

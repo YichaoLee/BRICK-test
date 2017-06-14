@@ -146,13 +146,13 @@ void opt(string name, int b, double p, int m, char* f, char* e, int o){
     string mode = "-mode=" + inttostring(m);
     string func = "-func=" + string(f);
     string output = "-output=" + inttostring(o);
-    string expr = "";
+    string expr = "-expression=\"";
     if(e != NULL)
-        expr += "-expression=\"" + string(e)+"\"";
+        expr += (string(e)+"\"");
     string command = "opt -load buildCFG.so -load libz3.so -load libminisat.so"
-    " -load libcapd.so -load libibex.so -load libdreal.so"
+    " -load libcapd.so -load libibex.so -load libClpSolver.so -load libClp.so -load libCoinUtils.so -load libnlopt.so -load libprim.so -load libdreal.so "
     " -buildCFG "+bound+" "+precision+" "+mode+" "+func+" "+output+" "+expr+"<"+name+".bc>"+" "+name+"buildCFG.bc";
-	
+	// g++ test_dreal.c -o test_dreal_inf -ldreal -libex -lClpSolver -lClp -lCoinUtils -lm -lcapd -lnlopt -lprim -lpthread -lstdc++ 
     if(o)    
 	   cout << command<<endl;
     int response = system(command.c_str());

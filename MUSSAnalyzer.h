@@ -17,11 +17,12 @@ extern int UC_LEVEL;
 
 class SubsetSolver{        
         unsigned n;
+        bool unsat_core;
         z3::context& c;
         z3::solver s;
         z3::expr_vector constraints;
 public:
-        SubsetSolver(z3::context& _c, z3::expr_vector _constraints);
+        SubsetSolver(z3::context& _c, z3::expr_vector _constraints ,bool _unsat_core);
         z3::expr c_var(int i);
         bool check_subset(std::vector<int> seed);
         z3::expr_vector to_c_lits(std::vector<int> seed);
@@ -29,6 +30,7 @@ public:
         std::vector<int> shrink(std::vector<int> seed);
         z3::expr get_constraint(int i);
         int get_id(z3::expr x);
+        void printVector(vector<int> &path);
         unsigned size(){return n;}
 };
 

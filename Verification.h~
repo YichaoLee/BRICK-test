@@ -12,6 +12,7 @@
 //#include "dreal_c.h"
 #include <fstream>
 #include "LinearVerify.h"
+#include "UnlinearZ3Verify.h"
 #include "UnlinearVerify.h"
 
 class BoundedVerification{
