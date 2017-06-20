@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include <sstream>
 #include <cstring>
-#include "dreal/dreal_c.h"
+#include "dreal/dreal.hh"
 #include "dreal/dreal.h"
 //#include "Solver.h"
 //#include "dreal_c.h"

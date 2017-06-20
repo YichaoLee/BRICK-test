@@ -521,8 +521,8 @@ expr NonlinearVerify::getExpr(Variable *v, bool &treat, double &val, NonlinearVa
 
 // generate the dreal_ast of compare constraint()
 expr NonlinearVerify::mk_compare_ast(Constraint *con, NonlinearVarTable *table){
-    expr exprl(s); 
-    expr exprr(s);
+    expr exprl; 
+    expr exprr;
     expr ast = (s.num(1)==s.num(1));
     Operator op = con->op;
 
@@ -1262,7 +1262,7 @@ expr NonlinearVerify::mk_compare_expr(Variable *lv, ParaVariable rpv, NonlinearV
     cerr<<cmp<<endl;
     dreal_expr ite_expr = dreal_mk_ite(s.get_ctx(), cmp.get_cexpr(), s.num(1).get_cexpr(), s.num(0).get_cexpr());
     dreal_print_expr(ite_expr);
-    expr ite_ep(s, ite_expr);
+    expr ite_ep(&s, ite_expr);
     cerr<<ite_ep<<endl;
     table->setX(lv->ID, ite_ep);
 
@@ -1362,7 +1362,7 @@ expr NonlinearVerify::mk_function_expr(Variable *lv, ParaVariable rpv, Nonlinear
         case ATAN2:{
             rv = table->getAlias(rpv.lvar);
             expr rvl_expr = getExpr(rv, treat, rval, table);
-            exprr = expr(s, dreal_mk_atan2(s.get_ctx(), rvl_expr.get_cexpr(), rv_expr.get_cexpr()));
+            exprr = expr(&s, dreal_mk_atan2(s.get_ctx(), rvl_expr.get_cexpr(), rv_expr.get_cexpr()));
             break;
         }
         case SIN:{
