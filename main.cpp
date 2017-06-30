@@ -149,9 +149,10 @@ void opt(string name, int b, double p, int m, char* f, char* e, int o){
     string expr = "";
     if(e != NULL)
         expr += ("-expression=\""+string(e)+"\"");
-    string command = "opt -load buildCFG.so -load libz3.so -load libminisat.so "
-    "-load libcapd.so -load libibex.so -load libdreal.so "
-    "-buildCFG "+bound+" "+precision+" "+mode+" "+func+" "+output+" "+expr+"<"+name+".bc>"+" "+name+"buildCFG.bc";
+    string command = "opt -load buildCFG.so"
+    " -load libz3.so -load libminisat.so"
+    " -load libibex.so -load libdreal.so"//-load libcapd.so 
+    " -buildCFG "+bound+" "+precision+" "+mode+" "+func+" "+output+" "+expr+"<"+name+".bc>"+" "+name+"buildCFG.bc";
 	// g++ test_dreal.c -o test_dreal_inf -ldreal -libex -lClpSolver -lClp -lCoinUtils -lm -lcapd -lnlopt -lprim -lpthread -lstdc++ 
     if(o)    
 	   cout << command<<endl;

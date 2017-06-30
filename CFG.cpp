@@ -236,12 +236,28 @@ raw_ostream& operator << (raw_ostream& os,Op_m& object){
         case sge:case uge:case fge:errs()<<" >= ";break;
         case eq:case feq:errs()<<" == ";break;
         case ne:case fne:errs()<<" != ";break;
+        case MKNAN:errs()<<" nan ";break;
         case ISNAN:errs()<<" isnan ";break;
         case ISINF:errs()<<" isinf ";break;
         case ISNORMAL:errs()<<" isnormal ";break;
         case ISFINITE:errs()<<" isfinite ";break;
         case SIGNBIT:errs()<<" signbit ";break;
         case CLASSIFY:errs()<<" fpclassify ";break;
+        case COPYSIGN:errs()<<" copysign ";break;
+        case FESETROUND:errs()<<" fesetround ";break;
+        case FEGETROUND:errs()<<" fegetround ";break;
+        case CEIL:errs()<<" ceil ";break;
+        case FLOOR:errs()<<" floor ";break;
+        case ROUND:errs()<<" round ";break;
+        case NEARBYINT:errs()<<" nearbyint ";break;
+        case RINT:errs()<<" rint ";break;
+        case FMAX:errs()<<" fmax ";break;
+        case FMIN:errs()<<" fmin ";break;
+        case FMOD:errs()<<" fmod ";break;
+        case FDIM:errs()<<" fdim ";break;
+        case REMAINDER:errs()<<" remainder ";break;
+        case MODF:errs()<<" modf ";break;
+        case FUNCTRUNC:errs()<<" functrunc ";break;
         case NONE:errs()<<" ";break;
     }
     return os;
@@ -313,12 +329,28 @@ extern string get_m_Operator_str(Op_m op){
         case sge:case uge:case fge:return " >= ";break;
         case eq:case feq:return " == ";break;
         case ne:case fne:return " != ";break;
+        case MKNAN:return " nan ";break;
         case ISNAN:return " isnan ";break;
         case ISINF:return " isinf ";break;
         case ISNORMAL:return " isnormal ";break;
         case ISFINITE:return " isfinite ";break;
         case SIGNBIT:return " signbit ";break;
         case CLASSIFY:return " fpclassify ";break;
+        case COPYSIGN:return " copysign ";break;
+        case FESETROUND:return " fesetround ";break;
+        case FEGETROUND:return " fegetround ";break;
+        case CEIL:return " ceil ";break;
+        case FLOOR:return " floor ";break;
+        case ROUND:return " round ";break;
+        case NEARBYINT:return " nearbyint ";break;
+        case RINT:return " rint ";break;
+        case FMAX:return " fmax ";break;
+        case FMIN:return " fmin ";break;
+        case FMOD:return " fmod ";break;
+        case FDIM:return " fdim ";break;
+        case REMAINDER:return " remainder ";break;
+        case MODF:return " modf ";break;
+        case FUNCTRUNC:return " functrunc ";break;
         default: assert(false);break;
     }
 }
@@ -534,7 +566,7 @@ Operator getEnumOperator(string str)
         assert(false);
 }
 
-Op_m get_m_Operator(string str){
+Op_m get_m_Operator(string str, bool isFunc){
 
     if(str=="tan")
         return TAN;
@@ -608,8 +640,10 @@ Op_m get_m_Operator(string str){
         return LSHR;
     else if(str=="shl")
         return SHL;
-    else if(str=="trunc")
+    else if(str=="trunc" && !isFunc)
         return TRUNC;
+    else if(str=="trunc")
+        return FUNCTRUNC;
     else if(str=="zext")
         return ZEXT;
     else if(str=="sext")
@@ -660,6 +694,8 @@ Op_m get_m_Operator(string str){
         return fge;
     else if(str=="FGT")
         return fgt;
+    else if(str=="nan"||str=="nanf"||str=="nanl")
+        return MKNAN;
     else if(str.find("isnan") != string::npos)
         return ISNAN;
     else if(str.find("isinf") != string::npos)
@@ -672,6 +708,34 @@ Op_m get_m_Operator(string str){
         return SIGNBIT;
     else if(str.find("fpclassify") != string::npos)
         return CLASSIFY;
+    else if(str=="copysign")
+        return COPYSIGN;
+    else if(str=="fesetround")
+        return FESETROUND;
+    else if(str=="fegetround")
+        return FEGETROUND;
+    else if(str=="ceil")
+        return CEIL;
+    else if(str=="floor")
+        return FLOOR;
+    else if(str=="round"||str=="lround"||str=="llround")
+        return ROUND;
+    else if(str=="nearbyint")
+        return NEARBYINT;
+    else if(str=="rint"||str=="lrint"||str=="llrint")
+        return RINT;
+    else if(str=="fmax")
+        return FMAX;
+    else if(str=="fmin")
+        return FMIN;
+    else if(str=="fmod")
+        return FMOD;
+    else if(str=="fdim")
+        return FDIM;
+    else if(str=="remainder")
+        return REMAINDER;
+    else if(str=="modf")
+        return MODF;
     else
         return NONE;
 }

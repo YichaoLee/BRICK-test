@@ -262,6 +262,7 @@ bool NonlinearVerify::check(CFG* ha, vector<int> &path)
     if(res == true){
         if(outMode==1)
             cerr<<"dreal_result is sat\n\n\n";
+    print_sol(ha);
         return true;
     }
     if(outMode==1)
@@ -270,15 +271,22 @@ bool NonlinearVerify::check(CFG* ha, vector<int> &path)
 }
 
 void NonlinearVerify::print_sol(CFG* cfg) {
-    vector<unsigned> &x = cfg->mainInput;
-    for(unsigned i=0;i<x.size();i++){
-        errs()<<cfg->variableList[x[i]].name<<" = [";
-        dreal_expr mainInput = table->getX(static_cast<int>(x[i]));
+    // vector<unsigned> &x = cfg->mainInput;
+    // for(unsigned i=0;i<x.size();i++){
+    //     errs()<<cfg->variableList[x[i]].name<<" = [";
+    //     dreal_expr mainInput = table->getX(static_cast<int>(x[i]));
 
-        double const x_lb = dreal_get_lb(ctx, mainInput);
-        double const x_ub = dreal_get_ub(ctx, mainInput);
-        errs()<<x_lb<<", "<<x_ub<<"]\n";
-    }
+    //     double const x_lb = dreal_get_lb(ctx, mainInput);
+    //     double const x_ub = dreal_get_ub(ctx, mainInput);
+    //     errs()<<x_lb<<", "<<x_ub<<"]\n";
+    // }
+
+    Variable *var = cfg->getVariable("main.y.0");
+    errs()<<var->name<<" = [";
+    dreal_expr mainInput = table->getX(static_cast<int>(var->ID));
+    double const x_lb = dreal_get_lb(ctx, mainInput);
+    double const x_ub = dreal_get_ub(ctx, mainInput);
+    errs()<<x_lb<<", "<<x_ub<<"]\n";
     return;
 }
 
@@ -673,7 +681,12 @@ dreal_expr NonlinearVerify::mk_assignment_ast(Constraint *con, NonlinearVarTable
                     break;
                 }
                 case ABS:case FABS:case SINH:case COSH:case TANH:case TAN:case ATAN:case ATAN2:
-                case SIN:case ASIN:case COS:case ACOS:case SQRT:case POW:case LOG:case LOG10:case EXP:{
+                case SIN:case ASIN:case COS:case ACOS:case SQRT:case POW:case LOG:case LOG10:case EXP:
+                /*************************relate to round mod which dreal can't handle yet******************/
+                // case FESETROUND:case FEGETROUND:
+                // case CEIL:case FLOOR:case ROUND:case NEARBYINT:case RINT:
+                // case FMOD:case REMAINDER:case FUNCTRUNC:
+                case COPYSIGN:case FMAX:case FMIN:case FDIM:{
                     ast = mk_function_expr(lv, rpv, table, time);
                     break;
                 }
@@ -1333,6 +1346,30 @@ dreal_expr NonlinearVerify::mk_function_expr(Variable *lv, ParaVariable rpv, Non
             assert(rv->type==FP||rv->type==FPNUM && "Mk_function_expr CLASSIFY error: rv is not an integer type!!");
             assert(false && "Mk_function_expr CLASSIFY error: Can't handle classify with unlinear constraints!!");
             break;
+        }
+        case COPYSIGN:{
+            rv = table->getAlias(rpv.lvar);
+            dreal_expr rvl_expr = getExpr(rv, treat, rval, table);
+            dreal_expr sign_cmp_expr = dreal_mk_geq(ctx, dreal_mk_times_2(ctx, rvl_expr, rv_expr), dreal_mk_num(ctx, 0));
+            exprr = dreal_mk_ite(ctx, sign_cmp_expr, rvl_expr, dreal_mk_uminus(ctx, rvl_expr));
+        }
+        case FMAX:{
+            rv = table->getAlias(rpv.lvar);
+            dreal_expr rvl_expr = getExpr(rv, treat, rval, table);
+            exprr = dreal_mk_max(ctx, rvl_expr, rv_expr);
+        }
+        case FMIN:{
+            rv = table->getAlias(rpv.lvar);
+            dreal_expr rvl_expr = getExpr(rv, treat, rval, table);
+            exprr = dreal_mk_min(ctx, rvl_expr, rv_expr);
+        }
+        case FDIM:{
+            rv = table->getAlias(rpv.lvar);
+            dreal_expr rvl_expr = getExpr(rv, treat, rval, table);
+            dreal_expr gt_expr = dreal_mk_gt(ctx, rvl_expr, rv_expr);
+            exprr = dreal_mk_ite(ctx, gt_expr, 
+                dreal_mk_minus(ctx, rvl_expr, rv_expr),
+                dreal_mk_num(ctx, 0));
         }
         case SINH:{
             exprr = dreal_mk_sinh(ctx, rv_expr);

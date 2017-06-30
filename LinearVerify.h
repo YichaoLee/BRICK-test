@@ -10,6 +10,7 @@
 #include "MUSSAnalyzer.h"
 #include "math.h"
 #include "DebugInfo.h"
+#include <cfenv>
 
 
 class LinearVarTable{
@@ -48,7 +49,8 @@ public:
 };
 
 class LinearVerify: public Verify{
-    z3::context c;
+    z3::context c; 
+    int roundModeNo;
     int outMode;
     DebugInfo *dbg;
     double solverTime;
@@ -76,6 +78,8 @@ class LinearVerify: public Verify{
     std::vector<IndexPair> index_cache; 
     std::vector<IndexPair> core_index;     
     void clear(){index_cache.clear();core_index.clear();}
+    void setRoundMode();
+    Z3_ast getRoundMode();
 public:
     LinearVerify();
     LinearVerify(DebugInfo *d, int mode);

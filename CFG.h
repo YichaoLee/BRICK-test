@@ -34,14 +34,23 @@ enum Operator{
 };
 
 enum Op_m{
+    //convert
     TRUNC,ZEXT,SEXT,FPTRUNC,FPEXT,FPTOUI,FPTOSI,UITOFP,SITOFP,
+    //binary operation
     FADD,ADD,SUB,FSUB,MUL,FMUL,UDIV,SDIV,FDIV,
     UREM,SREM,FREM,
     LSHR,ASHR,SHL,AND,NAND,OR,XOR,
-    ABS,FABS,
-    ISNAN,ISINF,ISNORMAL,ISFINITE,SIGNBIT,CLASSIFY,//SETROUND,
+    //float lib
+    MKNAN,ISNAN,ISINF,ISNORMAL,ISFINITE,SIGNBIT,CLASSIFY,
+    FESETROUND,FEGETROUND,COPYSIGN,
+    //math lib
     SINH,COSH,TANH,TAN,ATAN,ATAN2,SIN,ASIN,COS,ACOS,SQRT,POW,LOG,LOG10,EXP,
+    ABS,FABS,
+    CEIL,FLOOR,ROUND,FUNCTRUNC,NEARBYINT,RINT,
+    FMAX,FMIN,FMOD,FDIM,REMAINDER,MODF,
+    //ptr operation
     ADDR,GETPTR,STORE,LOAD,ALLOCA,BITCAST,
+    //compare operation
     eq,ne,
     slt,sle,sgt,sge,
     ult,ule,ugt,uge,
@@ -61,7 +70,7 @@ enum Err{
 };
 
 extern Operator getEnumOperator(string str);
-extern Op_m get_m_Operator(string str);
+extern Op_m get_m_Operator(string str,bool isFunc=false);
 extern string get_m_Operator_str(Op_m op);
 extern raw_ostream& operator << (raw_ostream& os,Operator& object);
 extern raw_ostream& operator << (raw_ostream& os,Op_m& object);

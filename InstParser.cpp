@@ -4248,9 +4248,9 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
             s->consList.push_back(cTemp);
             return;
         }
-    // **************************Deal with Math Functions(sin,cos,abs,isnan,isinf.....)****************************
+    // **************************Deal with Math or Float Functions(sin,cos,abs,isnan,isinf.....)****************************
         else{
-            pTemp2.op = get_m_Operator(funcName);
+            pTemp2.op = get_m_Operator(funcName,true);
             pTemp2.isExp = true;
         }
 
@@ -4262,14 +4262,18 @@ void InstParser::setConstraint(CFG* cfg, State* &s, BasicBlock::iterator &it, st
         }
 	//	math function like sin,pow is unlinear	
         switch(pTemp2.op){
-            case ISNAN:case ISINF:case ISNORMAL:case ISFINITE:case SIGNBIT:case CLASSIFY:
+            case MKNAN:case ISNAN:case ISINF:case ISNORMAL:case ISFINITE:case SIGNBIT:case CLASSIFY:
+            case FESETROUND:case FEGETROUND:
+            case CEIL:case FLOOR:case ROUND:case NEARBYINT:case RINT:
+            case FMOD:case REMAINDER:case FUNCTRUNC:
                 cfg->setLinear();cfg->setModeLock();break;
         	case SINH:case COSH:case TANH:case TAN:case ATAN:case ATAN2:case SIN:case ASIN:case COS:case ACOS:case SQRT:case POW:case LOG:case LOG10:case EXP:
         		cfg->setUnlinear();break;
         	default:
         		break;
         }
-    
+        
+        pTemp2.rvar = NULL;
         if(n1==2){
             Value* v1 = I->getOperand(0);
             numBits = getNumBits(v1);
@@ -5179,8 +5183,8 @@ void InstParser::preprocess(CFG* cfg, State* &s, const Instruction* I, string fu
                 temp->fromName=s->name;
                 temp->toState=qState;
                 temp->toName=name;
-                   temp->level=s->level+1;
-                   qState->level=temp->level;
+                temp->level=s->level+1;
+                qState->level=temp->level;
                 temp->guardList.clear();
 
                 /******************add wrong constraints (x<-1||x>1)********************/
@@ -5208,6 +5212,7 @@ void InstParser::preprocess(CFG* cfg, State* &s, const Instruction* I, string fu
                 temp->guardList.push_back(cTemp);
 
                 pTemp2.rvar = new Variable("1",-1,type,numBits);
+                pTemp2.op = NONE;
                 pTemp2.isExp = false;
                 cTemp.op=(type==INT)?SGT:FGT;
                 cTemp.rpvList = pTemp2;
@@ -5295,12 +5300,14 @@ void InstParser::preprocess(CFG* cfg, State* &s, const Instruction* I, string fu
             temp->guardList.push_back(cTemp);
 
             if(type == FP) {
-            	pTemp2.rvar = new Variable(double2string(precision),-1,FPNUM,numBits);
+                pTemp2.rvar = new Variable(double2string(precision),-1,FPNUM,numBits);
+                pTemp2.op = NONE;
             	pTemp2.isExp = false;
             	cTemp.op=FLT;
             }
             else if(type == INT){
             	pTemp2.rvar = new Variable("0",-1,INTNUM,numBits);
+                pTemp2.op = NONE;
             	pTemp2.isExp = false;
             	cTemp.op=EQ;
             }

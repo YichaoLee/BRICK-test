@@ -20,7 +20,7 @@ EXPORTED_SYMBOL_FILE = $(PROJ_SRC_DIR)/buildCFG.exports
 endif
 endif
 CCOPT = -fPIC -fno-strict-aliasing -fexceptions -DIL_STD 
-CPPFLAGS += -g -O3 $(CCOPT) -Iinclude -I.  -D __STDC_LIMIT_MACROS -D __STD_FORMAT_MACROS -I/usr/include/python2.7 -Wall -Wno-parentheses -Wextra -std=c++11 -mfpmath=sse -msse -msse2 -ffloat-store -frounding-math -lm -lpthread
+CPPFLAGS += -g -O3 $(CCOPT) -Iinclude -I.  -D __STDC_LIMIT_MACROS -D __STD_FORMAT_MACROS -I/usr/include/python2.7 -Wall -Wno-parentheses -Wextra -std=c++11 -mfpmath=sse -msse -msse2 -ffloat-store -frounding-math -ldreal -libex -lClpSolver -lClp -lCoinUtils -lm -lcapd -lnlopt -lprim -lpthread -lz3 -lminisat
 #CXXFLAGS += -g -O3 $(CCOPT) -Iinclude -I.  -D __STDC_LIMIT_MACROS -D __STD_FORMAT_MACROS -I/usr/include/python2.7 -Wall -Wno-parentheses -Wextra -std=c++11 -mfpmath=sse -msse -msse2 -ffloat-store -frounding-math -ldreal -libex -lClpSolver -lClp -lCoinUtils -lm -lcapd -lnlopt -lprim -lpthread
 #CXXFLAGS += -fexceptions
 include $(LEVEL)/Makefile.common

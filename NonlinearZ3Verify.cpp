@@ -575,7 +575,8 @@ z3::expr NonlinearZ3Verify::mk_assignment_ast(Constraint *con, NonlinearZ3VarTab
     				ast = mk_binaryop_expr(lv, rpv, table, time);
     				break;
     			}
-    			case ABS:case FABS:case POW:case SQRT:{
+    			case ABS:case FABS:case POW:case SQRT:
+                case COPYSIGN:case FMAX:case FMIN:case FDIM:{
     				ast = mk_function_expr(lv, rpv, table, time);
     				break;
     			}
@@ -1180,6 +1181,27 @@ z3::expr NonlinearZ3Verify::mk_function_expr(Variable *lv, ParaVariable rpv, Non
         case SQRT:{
             temp = pw(rv_expr, c.real_val("0.5"));
             break;
+        }
+        case COPYSIGN:{
+            rv = table->getAlias(rpv.lvar);
+            z3::expr rvl_expr = getExpr(rv, treat, rval, table);
+            z3::expr sign_cmp_expr = ((rvl_expr * rv_expr) > 0);
+            temp = ite(sign_cmp_expr, rvl_expr, -rvl_expr);
+        }
+        case FMAX:{
+            rv = table->getAlias(rpv.lvar);
+            z3::expr rvl_expr = getExpr(rv, treat, rval, table);
+            temp = ite((rvl_expr>rv_expr), rvl_expr, rv_expr);
+        }
+        case FMIN:{
+            rv = table->getAlias(rpv.lvar);
+            z3::expr rvl_expr = getExpr(rv, treat, rval, table);
+            temp = ite((rvl_expr<rv_expr), rvl_expr, rv_expr);
+        }
+        case FDIM:{
+            rv = table->getAlias(rpv.lvar);
+            z3::expr rvl_expr = getExpr(rv, treat, rval, table);
+            temp = ite((rvl_expr>rv_expr), (rvl_expr - rv_expr), c.int_val(0));
         }
     	default:
     		assert(false && "Mk_function_expr error: Op_m is not a function operator!!");
